@@ -8,11 +8,11 @@ import (
 
 // Participant structure
 type Participant struct {
-	OrderID     string
-	Role        Role
-	Price       decimal.Decimal
-	Quantity    decimal.Decimal
-	ReferenceID string
+	OrderID     string          `json:"orderID"`
+	Role        Role            `json:"role"`
+	Price       decimal.Decimal `json:"price"`
+	Quantity    decimal.Decimal `json:"quantity"`
+	ReferenceID string          `json:"refID"`
 }
 
 func (p *Participant) String() string {
@@ -51,6 +51,15 @@ func (t *Trade) Append(order *Order, quantity, price decimal.Decimal) {
 	}
 
 	t.Orders[order.ID()] = newParticipant(order, quantity, price, t.Order.ID())
+}
+
+// OrdersSlice returns useful slice for JSON
+func (t *Trade) OrdersSlice() []Participant {
+	slice := make([]Participant, 0, len(t.Orders))
+	for _, v := range t.Orders {
+		slice = append(slice, *v)
+	}
+	return slice
 }
 
 // String implements fmt.Stringer interface

@@ -72,12 +72,12 @@ func TestLimitFOKProcess(t *testing.T) {
 		t.Fatal("Wrong quantity processed")
 	}
 
-	done, err = ob.Process(matchingo.NewLimitOrder("order-b100", matchingo.Sell, decimal.New(11, 0), decimal.New(100, 0), matchingo.FOK, ""))
+	done, err = ob.Process(matchingo.NewLimitOrder("order-s100", matchingo.Sell, decimal.New(11, 0), decimal.New(100, 0), matchingo.FOK, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if done.Trade.Order.ID() != "order-b100" {
+	if done.Trade.Order.ID() != "order-s100" {
 		t.Fatal("Wrong done id")
 	}
 
@@ -117,6 +117,10 @@ func TestLimitIOCProcess(t *testing.T) {
 
 	if !done.Processed.Equal(decimal.New(10, 0)) {
 		t.Fatal("Wrong quantity processed")
+	}
+
+	if done.ToJSON() == "" {
+		t.Fatal("Wrong to JSON")
 	}
 }
 

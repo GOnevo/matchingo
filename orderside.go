@@ -163,26 +163,14 @@ func (os *OrderSide) BestPriceQueue() *OrderQueue {
 	return nil
 }
 
-// LessThan returns Orders queue where Price() < level
-func (os *OrderSide) LessThan(level decimal.Decimal) *OrderQueue {
+// NextLevel returns next Orders queue after level
+func (os *OrderSide) NextLevel(level decimal.Decimal) *OrderQueue {
 	if os.depth > 0 && !os.orderedPrices.Empty() {
-		for _, price := range os.Prices() {
-			if price.LessThan(level) {
-				return os.prices[price.String()]
-			}
+		price, ok := os.orderedPrices.FirstAbove(level)
+		if !ok {
+			return nil
 		}
-	}
-	return nil
-}
-
-// GreaterThan returns Orders queue where Price() > level
-func (os *OrderSide) GreaterThan(level decimal.Decimal) *OrderQueue {
-	if os.depth > 0 && !os.orderedPrices.Empty() {
-		for _, price := range os.Prices() {
-			if price.GreaterThan(level) {
-				return os.prices[price.String()]
-			}
-		}
+		return os.prices[price.String()]
 	}
 	return nil
 }

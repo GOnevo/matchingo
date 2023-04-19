@@ -7,6 +7,14 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// SimpleOrder structure
+type SimpleOrder struct {
+	OrderID  string `json:"orderID"`
+	Role     string `json:"role"`
+	Quantity string `json:"quantity"`
+	Price    string `json:"price"`
+}
+
 // Order stores information about order
 type Order struct {
 	id          string
@@ -201,6 +209,16 @@ func (o *Order) Role() Role {
 	}
 
 	return TAKER
+}
+
+// ToSimple returns Simple version of order
+func (o *Order) ToSimple() *SimpleOrder {
+	return &SimpleOrder{
+		OrderID:  o.ID(),
+		Role:     string(o.Role()),
+		Quantity: o.Quantity().String(),
+		Price:    o.Price().String(),
+	}
 }
 
 // String implements Stringer interface

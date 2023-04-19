@@ -252,7 +252,7 @@ func (ob *OrderBook) Depth() (asks, bids []Level) {
 			Price:  level.Price(),
 			Volume: level.Volume(),
 		})
-		level = ob.asks.GreaterThan(level.Price())
+		level = ob.asks.NextLevel(level.Price())
 	}
 
 	level = ob.bids.BestPriceQueue()
@@ -261,7 +261,7 @@ func (ob *OrderBook) Depth() (asks, bids []Level) {
 			Price:  level.Price(),
 			Volume: level.Volume(),
 		})
-		level = ob.bids.LessThan(level.Price())
+		level = ob.bids.NextLevel(level.Price())
 	}
 	return
 }
@@ -362,18 +362,15 @@ func (ob *OrderBook) cancelOCO(orderID string, done *Done) {
 func (ob *OrderBook) CalculateMarketPrice(side Side, quantity decimal.Decimal) (price decimal.Decimal, err error) {
 	price = decimal.Zero
 
-	var (
-		level *OrderQueue
-		iter  func(decimal.Decimal) *OrderQueue
-	)
-
+	var orders *OrderSide
 	if side == Buy {
-		level = ob.asks.BestPriceQueue()
-		iter = ob.asks.GreaterThan
+		orders = ob.asks
 	} else {
-		level = ob.bids.BestPriceQueue()
-		iter = ob.bids.LessThan
+		orders = ob.bids
 	}
+
+	level := orders.BestPriceQueue()
+	iter := orders.NextLevel
 
 	for quantity.Sign() > 0 && level != nil {
 		levelVolume := level.Volume()

@@ -109,3 +109,5 @@ Transactions per second (avg): 5184983.035733
 ---
 
 Made with ❤️ in Ukraine
+
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/vanodevium)

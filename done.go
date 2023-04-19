@@ -1,6 +1,10 @@
 package matchingo
 
-import "github.com/shopspring/decimal"
+import (
+	"encoding/json"
+
+	"github.com/shopspring/decimal"
+)
 
 // Done structure
 type Done struct {
@@ -11,6 +15,18 @@ type Done struct {
 	Quantity  decimal.Decimal
 	Left      decimal.Decimal
 	Processed decimal.Decimal
+}
+
+type DoneJSON struct {
+	Trade struct {
+		Order  SimpleOrder   `json:"order"`
+		Orders []Participant `json:"orders"`
+	} `json:"trade"`
+	Canceled  []string `json:"canceled"`
+	Activated []string `json:"activated"`
+	Stored    bool     `json:"stored"`
+	Left      string   `json:"left"`
+	Processed string   `json:"processed"`
 }
 
 func newDone(order *Order) *Done {
@@ -42,4 +58,24 @@ func (d *Done) setLeftQuantity(quantity *decimal.Decimal) {
 	}
 	d.Left = *quantity
 	d.Processed = d.Quantity.Sub(d.Left)
+}
+
+// ToJSON returns Done structure as JSON string
+func (d *Done) ToJSON() string {
+
+	jsonStruct := DoneJSON{}
+	jsonStruct.Trade.Order = *d.Trade.Order.ToSimple()
+	jsonStruct.Trade.Orders = d.Trade.OrdersSlice()
+	jsonStruct.Stored = d.Stored
+	jsonStruct.Left = d.Left.String()
+	jsonStruct.Processed = d.Processed.String()
+	jsonStruct.Canceled = d.Canceled
+	jsonStruct.Activated = d.Activated
+
+	j, err := json.Marshal(jsonStruct)
+	if err != nil {
+		return ""
+	}
+
+	return string(j)
 }
