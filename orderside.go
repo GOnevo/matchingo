@@ -2,9 +2,10 @@ package matchingo
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/hashicorp/go-set"
 	"github.com/shopspring/decimal"
-	"strings"
 )
 
 // Level contains Price and Volume in depth

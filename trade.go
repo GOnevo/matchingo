@@ -1,8 +1,9 @@
 package matchingo
 
 import (
-	"github.com/shopspring/decimal"
 	"strings"
+
+	"github.com/shopspring/decimal"
 )
 
 // Participant structure

@@ -1,9 +1,10 @@
 package tests
 
 import (
+	"testing"
+
 	"github.com/gonevo/matchingo"
 	"github.com/shopspring/decimal"
-	"testing"
 )
 
 func TestTrade_NewTrade(t *testing.T) {

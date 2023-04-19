@@ -2,9 +2,10 @@ package tests
 
 import (
 	"fmt"
-	"github.com/gonevo/matchingo"
 	"testing"
 	"time"
+
+	"github.com/gonevo/matchingo"
 
 	"github.com/shopspring/decimal"
 )

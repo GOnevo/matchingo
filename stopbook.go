@@ -2,8 +2,9 @@ package matchingo
 
 import (
 	"fmt"
-	"github.com/shopspring/decimal"
 	"strings"
+
+	"github.com/shopspring/decimal"
 )
 
 // StopBook implements facade to operations with Stop Orders

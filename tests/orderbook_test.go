@@ -2,10 +2,11 @@ package tests
 
 import (
 	"fmt"
-	"github.com/gonevo/matchingo"
-	"github.com/shopspring/decimal"
 	"testing"
 	"time"
+
+	"github.com/gonevo/matchingo"
+	"github.com/shopspring/decimal"
 )
 
 func addDepth(ob *matchingo.OrderBook, prefix string, quantity decimal.Decimal) {
