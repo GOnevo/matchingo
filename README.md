@@ -1,4 +1,6 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/gonevo/matchingo)](https://goreportcard.com/report/github.com/gonevo/matchingo)
+![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/gonevo/matchingo)
+![GitHub](https://img.shields.io/github/license/gonevo/matchingo)
 
 # Matchingo
 
