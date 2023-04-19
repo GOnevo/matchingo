@@ -117,7 +117,7 @@ func (ob *OrderBook) processLimitOrder(limitOrder *Order) (done *Done, err error
 	}
 
 	if tif == FOK {
-		if sideToProcess.CanOrderBeFilled(limitOrder.Side(), limitOrder.price, quantity) != true {
+		if !sideToProcess.CanOrderBeFilled(limitOrder.Side(), limitOrder.price, quantity) {
 			limitOrder.Cancel()
 			done.appendCanceled(limitOrder)
 			return

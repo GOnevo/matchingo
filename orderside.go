@@ -109,7 +109,7 @@ func (os *OrderSide) CanOrderBeFilled(side Side, priceLevel, quantity decimal.De
 		return os.CanBuyOrderBeFilled(priceLevel, quantity)
 	}
 
-	if side == Buy {
+	if side == Sell {
 		return os.CanSellOrderBeFilled(priceLevel, quantity)
 	}
 
@@ -174,35 +174,11 @@ func (os *OrderSide) LessThan(level decimal.Decimal) *OrderQueue {
 	return nil
 }
 
-// LessThanOrEqual returns Orders queue where Price() <= level
-func (os *OrderSide) LessThanOrEqual(level decimal.Decimal) *OrderQueue {
-	if os.depth > 0 && !os.orderedPrices.Empty() {
-		for _, price := range os.Prices() {
-			if price.LessThanOrEqual(level) {
-				return os.prices[price.String()]
-			}
-		}
-	}
-	return nil
-}
-
 // GreaterThan returns Orders queue where Price() > level
 func (os *OrderSide) GreaterThan(level decimal.Decimal) *OrderQueue {
 	if os.depth > 0 && !os.orderedPrices.Empty() {
 		for _, price := range os.Prices() {
 			if price.GreaterThan(level) {
-				return os.prices[price.String()]
-			}
-		}
-	}
-	return nil
-}
-
-// GreaterThanOrEqual returns Orders queue where Price() >= level
-func (os *OrderSide) GreaterThanOrEqual(level decimal.Decimal) *OrderQueue {
-	if os.depth > 0 && !os.orderedPrices.Empty() {
-		for _, price := range os.Prices() {
-			if price.GreaterThanOrEqual(level) {
 				return os.prices[price.String()]
 			}
 		}

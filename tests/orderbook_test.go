@@ -16,8 +16,6 @@ func addDepth(ob *matchingo.OrderBook, prefix string, quantity decimal.Decimal) 
 	for i := 100; i < 150; i = i + 10 {
 		ob.Process(matchingo.NewLimitOrder(fmt.Sprintf("%ssell-%d", prefix, i), matchingo.Sell, quantity, decimal.New(int64(i), 0), "", ""))
 	}
-
-	return
 }
 
 func TestMarketQuantityQuoteProcessing(t *testing.T) {
@@ -29,9 +27,6 @@ func TestMarketQuantityQuoteProcessing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	t.Log(done)
-	t.Log(ob)
 
 	if done.Trade.Order.ID() != "order-2" {
 		t.Fatal("Wrong order id")
@@ -52,9 +47,31 @@ func TestMarketQuantityQuoteProcessing(t *testing.T) {
 
 func TestLimitFOKProcess(t *testing.T) {
 	ob := matchingo.NewOrderBook()
+
 	addDepth(ob, "", decimal.New(2, 0))
 
 	done, err := ob.Process(matchingo.NewLimitOrder("order-b100", matchingo.Buy, decimal.New(11, 0), decimal.New(100, 0), matchingo.FOK, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if done.Trade.Order.ID() != "order-b100" {
+		t.Fatal("Wrong done id")
+	}
+
+	if !done.Trade.Order.IsCanceled() {
+		t.Fatal("Wrong done canceled")
+	}
+
+	if !done.Left.Equal(decimal.Zero) {
+		t.Fatal("Wrong quantity left")
+	}
+
+	if !done.Processed.Equal(decimal.Zero) {
+		t.Fatal("Wrong quantity processed")
+	}
+
+	done, err = ob.Process(matchingo.NewLimitOrder("order-b100", matchingo.Sell, decimal.New(11, 0), decimal.New(100, 0), matchingo.FOK, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,8 +153,6 @@ func TestLimitPlace(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-
-	return
 }
 
 func TestLimitProcess(t *testing.T) {

@@ -1,3 +1,5 @@
+[![Go Report Card](https://goreportcard.com/badge/github.com/gonevo/matchingo)](https://goreportcard.com/report/github.com/gonevo/matchingo)
+
 # Matchingo
 
 Incredibly fast matching engine for HFT written in Golang

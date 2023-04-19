@@ -36,24 +36,9 @@ func (oq *OrderQueue) Volume() decimal.Decimal {
 	return oq.volume
 }
 
-// Head returns top Order in queue
-func (oq *OrderQueue) Head() Order {
-	return oq.Orders.PopFront()
-}
-
 // First returns top Order in queue
 func (oq *OrderQueue) First() Order {
 	return oq.Orders.Front()
-}
-
-// Tail returns bottom Order in queue
-func (oq *OrderQueue) Tail() Order {
-	return oq.Orders.PopBack()
-}
-
-// Last returns top Order in queue
-func (oq *OrderQueue) Last() Order {
-	return oq.Orders.Back()
 }
 
 // Append adds Order to tail of the queue
@@ -88,19 +73,6 @@ func (oq *OrderQueue) RemoveIndex(index int) bool {
 	}
 
 	return false
-}
-
-// Find finds Order by ID
-func (oq *OrderQueue) Find(id string) (*Order, bool) {
-	index := oq.Orders.Index(func(o Order) bool {
-		return o.ID() == id
-	})
-	if index != -1 {
-		order := oq.Orders.At(index)
-		return &order, true
-	}
-
-	return nil, false
 }
 
 // Slice returns slice of Orders, queue will be empty

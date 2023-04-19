@@ -64,6 +64,10 @@ func TestOrderSideBid(t *testing.T) {
 	if prices[1] != o1.Price() {
 		t.Fatal("invalid price sorting for orderSide..Prices() slice")
 	}
+
+	if orderSide.String() == "" {
+		t.Fatal("String not work")
+	}
 }
 
 func TestOrderSideAsk(t *testing.T) {
@@ -120,6 +124,10 @@ func TestOrderSideAsk(t *testing.T) {
 
 	if prices[1] != o2.Price() {
 		t.Fatal("invalid price sorting for orderSide..Prices() slice")
+	}
+
+	if orderSide.String() == "" {
+		t.Fatal("String not work")
 	}
 }
 

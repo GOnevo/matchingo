@@ -121,15 +121,3 @@ func (sb *StopBook) String() string {
 
 	return builder.String()
 }
-
-//// Orders returns all of *list.Element Orders
-//func (sb *StopBook) Orders() (Orders []*Order) {
-//	for _, Price := range sb.prices {
-//		iter := Price.Head()
-//		for iter != nil {
-//			Orders = appendLimitOrder(Orders, iter)
-//			iter = iter.Next()
-//		}
-//	}
-//	return
-//}

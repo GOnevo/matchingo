@@ -36,4 +36,8 @@ func TestTrade_NewTrade(t *testing.T) {
 		"",
 		"",
 	), decimal.New(10, 0), decimal.New(10, 0))
+
+	if trade.String() == "" {
+		t.Fatal("String not work")
+	}
 }
