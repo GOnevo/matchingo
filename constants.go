@@ -3,6 +3,7 @@ package matchingo
 // OrderType of the Order
 type OrderType string
 
+// Different order types
 const (
 	TypeMarket    OrderType = "MARKET"
 	TypeLimit     OrderType = "LIMIT"
@@ -12,6 +13,7 @@ const (
 // Role of the Order
 type Role string
 
+// Different order roles
 const (
 	MAKER Role = "MAKER"
 	TAKER Role = "TAKER"
@@ -38,6 +40,7 @@ func (s Side) String() string {
 // TIF of the Order
 type TIF string
 
+// Different order TIF
 const (
 	GTC TIF = "GTC"
 	FOK TIF = "FOK"

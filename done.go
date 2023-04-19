@@ -2,6 +2,7 @@ package matchingo
 
 import "github.com/shopspring/decimal"
 
+// Done structure
 type Done struct {
 	Trade     *Trade
 	Canceled  []string
@@ -23,19 +24,19 @@ func newDone(order *Order) *Done {
 	}
 }
 
-func (d *Done) AppendOrder(order *Order, quantity, price decimal.Decimal) {
+func (d *Done) appendOrder(order *Order, quantity, price decimal.Decimal) {
 	d.Trade.Append(order, quantity, price)
 }
 
-func (d *Done) AppendCanceled(order *Order) {
+func (d *Done) appendCanceled(order *Order) {
 	d.Canceled = append(d.Canceled, order.ID())
 }
 
-func (d *Done) AppendActivated(order *Order) {
+func (d *Done) appendActivated(order *Order) {
 	d.Activated = append(d.Activated, order.ID())
 }
 
-func (d *Done) SetLeftQuantity(quantity *decimal.Decimal) {
+func (d *Done) setLeftQuantity(quantity *decimal.Decimal) {
 	if len(d.Trade.Orders) == 0 {
 		return
 	}

@@ -165,12 +165,12 @@ func TestOrderQueueUpdate(t *testing.T) {
 	oq.Append(o2)
 
 	headOrder := oq.First()
-	oq.UpdateQuantity(headOrder, decimal.New(333, 0))
+	oq.DecreaseQuantity(headOrder, decimal.New(55, 0))
 
 	headOrder = oq.First()
 
-	if headOrder.Quantity().String() != "333" {
-		t.Fatalf("Invalid new price (have: %s, want: 333)", headOrder.Quantity().String())
+	if headOrder.Quantity().String() != "45" {
+		t.Fatalf("Invalid new price (have: %s, want: 45)", headOrder.Quantity().String())
 	}
 }
 

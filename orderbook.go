@@ -24,6 +24,7 @@ func NewOrderBook() *OrderBook {
 	}
 }
 
+// Process public method
 func (ob *OrderBook) Process(order *Order) (done *Done, err error) {
 	if order.IsMarketOrder() {
 		return ob.processMarketOrder(order)
@@ -66,16 +67,19 @@ func (ob *OrderBook) processMarketOrder(marketOrder *Order) (done *Done, err err
 
 	for quantity.Sign() > 0 && sideToProcess.Len() > 0 {
 		bestPrice := iter()
-		quantityLeft := ob.processQueue(bestPrice, quantity, done)
-		quantity = quantityLeft
+		if marketOrder.Side() == Buy {
+			quantity = ob.processQueueQuote(bestPrice, quantity, done)
+		} else {
+			quantity = ob.processQueue(bestPrice, quantity, done)
+		}
 	}
 
-	done.SetLeftQuantity(&quantity)
+	done.setLeftQuantity(&quantity)
 
 	// If market Order was not fulfilled then cancel it
-	if done.Left.GreaterThan(decimal.Zero) {
+	if done.Left.Sign() == 1 {
 		marketOrder.Cancel()
-		done.AppendCanceled(marketOrder)
+		done.appendCanceled(marketOrder)
 	}
 
 	return done, nil
@@ -130,7 +134,7 @@ func (ob *OrderBook) processLimitOrder(limitOrder *Order) (done *Done, err error
 	if tif == FOK {
 		if sideToProcess.CanOrderBeFilled(limitOrder.Side(), limitOrder.price, quantity) != true {
 			limitOrder.Cancel()
-			done.AppendCanceled(limitOrder)
+			done.appendCanceled(limitOrder)
 			return
 		}
 	}
@@ -138,12 +142,11 @@ func (ob *OrderBook) processLimitOrder(limitOrder *Order) (done *Done, err error
 	bestPrice := iter()
 
 	for quantity.Sign() > 0 && sideToProcess.Len() > 0 && comparator(bestPrice.Price()) {
-		quantityLeft := ob.processQueue(bestPrice, quantity, done)
-		quantity = quantityLeft
+		quantity = ob.processQueue(bestPrice, quantity, done)
 		bestPrice = iter()
 	}
 
-	done.SetLeftQuantity(&quantity)
+	done.setLeftQuantity(&quantity)
 
 	if done.Left.Sign() > 0 || done.Processed.Equal(decimal.Zero) {
 		if done.Left.Sign() > 0 {
@@ -158,9 +161,10 @@ func (ob *OrderBook) processLimitOrder(limitOrder *Order) (done *Done, err error
 	}
 
 	// If IOC Order was not fulfilled then cancel it
-	if tif == IOC && quantity.GreaterThan(decimal.Zero) {
+	if tif == IOC && quantity.Sign() == 1 {
 		canceledOrder := ob.CancelOrder(limitOrder.ID())
-		done.AppendCanceled(canceledOrder)
+		done.appendCanceled(canceledOrder)
+		done.Stored = false
 	}
 
 	return
@@ -189,7 +193,7 @@ func (ob *OrderBook) appendLimitOrder(order *Order) {
 	panic("order has not LIMIT type")
 }
 
-func (ob *OrderBook) ActivateStopOrders(price decimal.Decimal) []*Order {
+func (ob *OrderBook) activateStopOrders(price decimal.Decimal) []*Order {
 	var activated []*Order
 	orders := ob.Stop.Activate(price)
 	for _, order := range orders {
@@ -201,28 +205,48 @@ func (ob *OrderBook) ActivateStopOrders(price decimal.Decimal) []*Order {
 	return activated
 }
 
-func (ob *OrderBook) processQueue(orderQueue *OrderQueue, quantity decimal.Decimal, done *Done) decimal.Decimal {
-	quantityLeft := quantity
+func (ob *OrderBook) processQueueQuote(bestPrice *OrderQueue, quantity decimal.Decimal, done *Done) decimal.Decimal {
+	return ob.adaptQuantityQuote(
+		ob.processQueue(bestPrice, ob.adaptQuantityBase(quantity, bestPrice.Price()), done), bestPrice.Price(),
+	)
+}
 
-	for orderQueue.Len() > 0 && quantityLeft.Sign() > 0 {
+func (ob *OrderBook) processQueue(orderQueue *OrderQueue, quantity decimal.Decimal, done *Done) decimal.Decimal {
+	touch := false
+	price := orderQueue.Price()
+
+	for quantity.Sign() > 0 && orderQueue.Len() > 0 {
+		touch = true
 		o := orderQueue.First()
-		if quantityLeft.LessThan(o.Quantity()) {
-			done.AppendOrder(&o, quantityLeft, o.Price())
-			orderQueue.UpdateQuantity(o, o.Quantity().Sub(quantityLeft))
-			quantityLeft = decimal.Zero
+		orderQuantity := o.Quantity()
+		if quantity.LessThan(orderQuantity) {
+			done.appendOrder(&o, quantity, price)
+			orderQueue.DecreaseQuantity(o, quantity)
+			quantity = decimal.Zero
 		} else {
 			ob.appendToOCO(&o, done)
 			ob.DeleteOrder(&o)
-			done.AppendOrder(&o, o.Quantity(), o.Price())
-			quantityLeft = quantityLeft.Sub(o.Quantity())
-		}
-		// activate Stop Orders for this Price level
-		for _, activatedOrder := range ob.ActivateStopOrders(o.Price()) {
-			done.AppendActivated(activatedOrder)
+			done.appendOrder(&o, orderQuantity, price)
+			quantity = quantity.Sub(orderQuantity)
 		}
 	}
 
-	return quantityLeft
+	if touch {
+		// activate Stop Orders for this Price level
+		for _, activatedOrder := range ob.activateStopOrders(price) {
+			done.appendActivated(activatedOrder)
+		}
+	}
+
+	return quantity
+}
+
+func (ob *OrderBook) adaptQuantityBase(quantity, price decimal.Decimal) decimal.Decimal {
+	return quantity.Div(price)
+}
+
+func (ob *OrderBook) adaptQuantityQuote(quantity, price decimal.Decimal) decimal.Decimal {
+	return quantity.Mul(price)
 }
 
 // Order returns Order by id
@@ -337,14 +361,14 @@ func (ob *OrderBook) cancelOCO(orderID string, done *Done) {
 	if canceledOrder != nil {
 		canceledOrder.Cancel()
 		delete(ob.OCO, orderID)
-		done.AppendCanceled(canceledOrder)
+		done.appendCanceled(canceledOrder)
 	}
 
 	canceledOrder = ob.DeleteOrderByID(orderID)
 	if canceledOrder != nil {
 		canceledOrder.Cancel()
 		delete(ob.OCO, orderID)
-		done.AppendCanceled(canceledOrder)
+		done.appendCanceled(canceledOrder)
 	}
 }
 

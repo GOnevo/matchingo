@@ -65,7 +65,7 @@ func (oq *OrderQueue) Append(o *Order) {
 // Remove removes Order from the queue
 func (oq *OrderQueue) Remove(order *Order) bool {
 	index := oq.Orders.Index(func(o Order) bool {
-		return o.id == order.ID()
+		return o.ID() == order.ID()
 	})
 	return oq.RemoveIndex(index)
 }
@@ -73,7 +73,7 @@ func (oq *OrderQueue) Remove(order *Order) bool {
 // RemoveByID removes Order from the queue
 func (oq *OrderQueue) RemoveByID(id string) bool {
 	index := oq.Orders.Index(func(order Order) bool {
-		return order.id == id
+		return order.ID() == id
 	})
 	return oq.RemoveIndex(index)
 }
@@ -93,7 +93,7 @@ func (oq *OrderQueue) RemoveIndex(index int) bool {
 // Find finds Order by ID
 func (oq *OrderQueue) Find(id string) (*Order, bool) {
 	index := oq.Orders.Index(func(o Order) bool {
-		return o.id == id
+		return o.ID() == id
 	})
 	if index != -1 {
 		order := oq.Orders.At(index)
@@ -114,17 +114,15 @@ func (oq *OrderQueue) Slice() []Order {
 	return slice
 }
 
-// UpdateQuantity updates Order
-func (oq *OrderQueue) UpdateQuantity(order Order, qty decimal.Decimal) {
+// DecreaseQuantity updates Order
+func (oq *OrderQueue) DecreaseQuantity(order Order, quantity decimal.Decimal) {
 	index := oq.Orders.Index(func(o Order) bool {
-		return o.id == order.ID()
+		return o.ID() == order.ID()
 	})
 	if index != -1 {
 		order := oq.Orders.At(index)
-		order.quantity = qty
+		order.DecreaseQuantity(quantity)
 		oq.Orders.Set(index, order)
-
-		oq.volume = oq.volume.Sub(order.Quantity())
-		oq.volume = oq.volume.Add(qty)
+		oq.volume = oq.volume.Sub(quantity)
 	}
 }

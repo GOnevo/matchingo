@@ -3,10 +3,27 @@
 Incredibly fast matching engine for HFT written in Golang
 
 ### Features
+
 - supports **MARKET**, **LIMIT**, **STOP-LIMIT**, **OCO** order types
 - supports _time-in-force_ (**GTK**, **FOK**, **IOC**) parameters for **LIMIT** orders
 - uses [shopspring/decimal](https://github.com/shopspring/decimal) for price and quantity arguments
 - well tested code
+
+##### Order quantity
+
+> **It is very important!** Each SYMBOL is combination of BASE and QUOTE currencies.
+> For example, **BTC/USD** where **BTC** is **BASE** currency, **USD** is **QUOTE** currency.
+
+Each order **MUST HAVE** _quantity_ parameter but **pay attention**:
+for **MARKET BUY** orders you have pass **QUOTE quantity**.
+
+Examples for **BTC/USD** symbol:
+
+- for **MARKET** **SELL** order 10 BTC, you have to pass quantity=10
+- for **MARKET** **BUY** order 10 BTC, you have to pass maximum quantity of USD for attempt to buy 10 BTC
+
+> This may seem inconvenient, but it is a precautionary measure for **double spending**: when a user places a
+> **MARKET** **BUY** in asynchronous way, you will be able to freeze the correct quantity on his balance.
 
 ### Installation
 
@@ -22,7 +39,7 @@ go get github.com/gonevo/matchingo
 - `NewLimitOrder(orderID string, side Side, quantity, price decimal.Decimal, tif TIF, oco string)`
 - `NewStopOrder(orderID string, side Side, quantity, price, stop decimal.Decimal, oco string)`
 
-> oco parameter is ID of another order from **OCO** orders set 
+> oco parameter is ID of another order from **OCO** orders set
 
 #### Order processing
 
@@ -35,17 +52,15 @@ go get github.com/gonevo/matchingo
 - **Trade** instance
     - **Order**: exactly processed order
     - **Orders**: slice of orders from the order book which are participants for this trade
-      - **OrderID**: participant-order ID
-      - **Price**: concrete trade price, _decimal.Decimal_ 
-      - **Quantity**: concrete trade quantity, _decimal.Decimal_ 
-      - **ReferenceID**: reference to the exactly processed order
-- **Canceled**: slice of order IDs which was cancelled for this processing (**IOC**, **OCO**), can be empty 
+        - **OrderID**: participant-order ID
+        - **Price**: concrete trade price, _decimal.Decimal_
+        - **Quantity**: concrete trade quantity, _decimal.Decimal_
+        - **ReferenceID**: reference to the exactly processed order
+- **Canceled**: slice of order IDs which was cancelled for this processing (**IOC**, **OCO**), can be empty
 - **Activated**: slice of order IDs which was activated for this processing (**STOP** orders), can be empty
 - **Left**: _decimal.Decimal_ value of left quantity for this processing, can be _decimal.Zero_
 - **Processed**: _decimal.Decimal_ value of processed quantity for this processing, can be _decimal.Zero_
 - **Stored**: boolean, _true_ if order was appended to **stop book** or **order book**
-
-
 
 ### Example
 
@@ -68,6 +83,7 @@ func main() {
 ```
 
 ### Benchmark
+
 ```
 goos: linux
 goarch: amd64

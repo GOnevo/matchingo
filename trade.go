@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// Participant structure
 type Participant struct {
 	OrderID     string
 	Role        Role
@@ -14,7 +15,7 @@ type Participant struct {
 }
 
 func (p *Participant) String() string {
-	return "\t" + p.OrderID + "|Price:" + p.Price.String() + "|q:" + p.Quantity.String() + "|role:" + string(p.Role) + "|" + p.ReferenceID
+	return "\t" + p.OrderID + "|price:" + p.Price.String() + "|q:" + p.Quantity.String() + "|role:" + string(p.Role) + "|" + p.ReferenceID
 }
 
 func newParticipant(order *Order, quantity, price decimal.Decimal, refID string) *Participant {
@@ -27,11 +28,13 @@ func newParticipant(order *Order, quantity, price decimal.Decimal, refID string)
 	}
 }
 
+// Trade structure
 type Trade struct {
 	Order  *Order
 	Orders map[string]*Participant
 }
 
+// NewTrade public constructor
 func NewTrade(order *Order) *Trade {
 	return &Trade{
 		Order:  order,
@@ -39,6 +42,7 @@ func NewTrade(order *Order) *Trade {
 	}
 }
 
+// Append public method
 func (t *Trade) Append(order *Order, quantity, price decimal.Decimal) {
 
 	if _, ok := t.Orders[order.ID()]; ok {

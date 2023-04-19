@@ -94,6 +94,11 @@ func (o *Order) SetQuantity(quantity decimal.Decimal) {
 	o.quantity = quantity
 }
 
+// DecreaseQuantity set Quantity field
+func (o *Order) DecreaseQuantity(quantity decimal.Decimal) {
+	o.quantity = o.quantity.Sub(quantity)
+}
+
 // Price returns Price field copy
 func (o *Order) Price() decimal.Decimal {
 	return o.price

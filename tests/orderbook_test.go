@@ -20,6 +20,36 @@ func addDepth(ob *matchingo.OrderBook, prefix string, quantity decimal.Decimal) 
 	return
 }
 
+func TestMarketQuantityQuoteProcessing(t *testing.T) {
+	ob := matchingo.NewOrderBook()
+
+	ob.Process(matchingo.NewLimitOrder("order-1", matchingo.Sell, decimal.New(10, 0), decimal.New(10, 0), "", ""))
+
+	done, err := ob.Process(matchingo.NewMarketOrder("order-2", matchingo.Buy, decimal.New(100, 0)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log(done)
+	t.Log(ob)
+
+	if done.Trade.Order.ID() != "order-2" {
+		t.Fatal("Wrong order id")
+	}
+
+	if done.Trade.Orders["order-1"] == nil {
+		t.Fatal("Wrong orders id")
+	}
+
+	if done.Trade.Orders["order-1"].Quantity.Equal(decimal.New(10, 0)) == false {
+		t.Fatal("Wrong orders quantity")
+	}
+
+	if done.Left.Equal(decimal.New(0, 0)) != true {
+		t.Fatal("Wrong quote calculation")
+	}
+}
+
 func TestLimitFOKProcess(t *testing.T) {
 	ob := matchingo.NewOrderBook()
 	addDepth(ob, "", decimal.New(2, 0))
@@ -222,7 +252,9 @@ func TestOCOProcessLimit(t *testing.T) {
 	ob.Process(
 		matchingo.NewStopLimitOrder("oco-2", matchingo.Buy, decimal.New(1, 0), decimal.New(150, 0), decimal.New(101, 0), "oco-1"),
 	)
-	ob.ActivateStopOrders(decimal.New(101, 0))
+	ob.Process(matchingo.NewLimitOrder("o1", matchingo.Sell, decimal.New(1, 0), decimal.New(101, 0), "", ""))
+	ob.Process(matchingo.NewLimitOrder("o2", matchingo.Buy, decimal.New(1, 0), decimal.New(101, 0), "", ""))
+
 	ob.Process(matchingo.NewLimitOrder("oco-1", matchingo.Buy, decimal.New(1, 0), decimal.New(100, 0), "", "oco-2"))
 
 	done, err := ob.Process(matchingo.NewLimitOrder("simple-1", matchingo.Sell, decimal.New(1, 0), decimal.New(100, 0), "", ""))
@@ -256,7 +288,7 @@ func TestMarketProcess(t *testing.T) {
 	addDepth(ob, "", decimal.New(2, 0))
 
 	done, err := ob.Process(
-		matchingo.NewMarketOrder("order-buy-3", matchingo.Buy, decimal.New(3, 0)),
+		matchingo.NewMarketOrder("order-buy-3", matchingo.Buy, decimal.New(300, 0)),
 	)
 
 	if err != nil {
@@ -271,7 +303,7 @@ func TestMarketProcess(t *testing.T) {
 		t.Fatal("Wrong quantity left")
 	}
 
-	if !done.Processed.Equal(decimal.New(3, 0)) {
+	if !done.Processed.Equal(decimal.New(300, 0)) {
 		t.Fatal("Wrong quantity processed")
 	}
 
