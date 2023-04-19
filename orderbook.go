@@ -94,21 +94,6 @@ func (ob *OrderBook) processLimitOrder(limitOrder *Order) (done *Done, err error
 		return nil, ErrOrderExists
 	}
 
-	if quantity.Sign() <= 0 {
-		return nil, ErrInvalidQuantity
-	}
-
-	if limitOrder.price.Sign() <= 0 {
-		return nil, ErrInvalidPrice
-	}
-
-	if tif == "" {
-		tif = GTC
-	}
-	if tif != GTC && tif != FOK && tif != IOC {
-		return nil, ErrInvalidTif
-	}
-
 	var (
 		sideToProcess *OrderSide
 		comparator    func(decimal.Decimal) bool

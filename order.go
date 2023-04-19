@@ -25,6 +25,11 @@ type Order struct {
 
 // NewMarketOrder creates new constant object Order
 func NewMarketOrder(orderID string, side Side, quantity decimal.Decimal) *Order {
+
+	if quantity.Sign() <= 0 {
+		panic(ErrInvalidQuantity)
+	}
+
 	return &Order{
 		id:          orderID,
 		orderType:   TypeMarket,
@@ -39,6 +44,19 @@ func NewMarketOrder(orderID string, side Side, quantity decimal.Decimal) *Order 
 
 // NewLimitOrder creates new constant object Order
 func NewLimitOrder(orderID string, side Side, quantity, price decimal.Decimal, tif TIF, oco string) *Order {
+
+	if quantity.Sign() <= 0 {
+		panic(ErrInvalidQuantity)
+	}
+
+	if price.Sign() != 1 {
+		panic(ErrInvalidPrice)
+	}
+
+	if tif != "" && tif != GTC && tif != FOK && tif != IOC {
+		panic(ErrInvalidTif)
+	}
+
 	return &Order{
 		id:          orderID,
 		orderType:   TypeLimit,
@@ -55,6 +73,15 @@ func NewLimitOrder(orderID string, side Side, quantity, price decimal.Decimal, t
 
 // NewStopLimitOrder creates new constant object Order
 func NewStopLimitOrder(orderID string, side Side, quantity, price, stop decimal.Decimal, oco string) *Order {
+
+	if quantity.Sign() <= 0 {
+		panic(ErrInvalidQuantity)
+	}
+
+	if price.Sign() != 1 || stop.Sign() != 1 {
+		panic(ErrInvalidPrice)
+	}
+
 	return &Order{
 		id:          orderID,
 		orderType:   TypeStopLimit,

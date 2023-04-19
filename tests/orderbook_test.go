@@ -190,18 +190,6 @@ func TestLimitProcess(t *testing.T) {
 		t.Fatal("Can add existing order")
 	}
 
-	if _, err := ob.Process(matchingo.NewLimitOrder("fake-70", matchingo.Sell, decimal.New(0, 0), decimal.New(40, 0), "", "")); err == nil {
-		t.Fatal("Can add empty quantity order")
-	}
-
-	if _, err := ob.Process(matchingo.NewLimitOrder("fake-70", matchingo.Sell, decimal.New(10, 0), decimal.New(0, 0), "", "")); err == nil {
-		t.Fatal("Can add zero price")
-	}
-
-	if _, err := ob.Process(matchingo.NewLimitOrder("fake-70", matchingo.Sell, decimal.New(10, 0), decimal.New(10, 0), "FAKE", "")); err == nil {
-		t.Fatal("Can add weird TIF")
-	}
-
 	done, err = ob.Process(matchingo.NewLimitOrder("order-s40", matchingo.Sell, decimal.New(11, 0), decimal.New(40, 0), "", ""))
 	if err != nil {
 		t.Fatal(err)
@@ -309,10 +297,6 @@ func TestMarketProcess(t *testing.T) {
 
 	if done.Trade.Order.IsCanceled() {
 		t.Fatal("order is not canceled")
-	}
-
-	if _, err := ob.Process(matchingo.NewMarketOrder("order-buy-0", matchingo.Buy, decimal.New(0, 0))); err == nil {
-		t.Fatal("Can add zero quantity order")
 	}
 
 	done, err = ob.Process(matchingo.NewMarketOrder("order-sell-12", matchingo.Sell, decimal.New(12, 0)))
