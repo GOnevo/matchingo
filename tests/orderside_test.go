@@ -317,17 +317,16 @@ func TestOrderSide_CanSellOrderBeFilled(t *testing.T) {
 	}
 }
 
-func BenchmarkOrderSide(b *testing.B) {
-	ot := matchingo.NewOrderSideBid()
-	stopwatch := time.Now()
-	price := decimal.New(10, 0)
+var BenchOrderSideBid = matchingo.NewOrderSideBid()
 
-	for i := 0; i < b.N; i++ {
-		ot.Append(matchingo.NewLimitOrder(
+func BenchmarkOrderSide(b *testing.B) {
+	stopwatch := time.Now()
+	for i := 1; i < b.N; i++ {
+		BenchOrderSideBid.Append(matchingo.NewLimitOrder(
 			fmt.Sprintf("order-%d", i),
 			matchingo.Buy,
-			price,
-			decimal.New(int64(i), 0),
+			BenchQuantity,
+			BenchPrice,
 			"",
 			"",
 		))

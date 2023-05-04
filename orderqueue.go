@@ -9,7 +9,7 @@ import (
 type OrderQueue struct {
 	volume decimal.Decimal
 	price  decimal.Decimal
-	Orders *deque.Deque[Order]
+	Orders *deque.Deque[*Order]
 }
 
 // NewOrderQueue creates and initialize OrderQueue object
@@ -17,7 +17,7 @@ func NewOrderQueue(price decimal.Decimal) *OrderQueue {
 	return &OrderQueue{
 		price:  price,
 		volume: decimal.Zero,
-		Orders: deque.New[Order](),
+		Orders: deque.New[*Order](),
 	}
 }
 
@@ -37,19 +37,19 @@ func (oq *OrderQueue) Volume() decimal.Decimal {
 }
 
 // First returns top Order in queue
-func (oq *OrderQueue) First() Order {
+func (oq *OrderQueue) First() *Order {
 	return oq.Orders.Front()
 }
 
 // Append adds Order to tail of the queue
 func (oq *OrderQueue) Append(o *Order) {
 	oq.volume = oq.volume.Add(o.Quantity())
-	oq.Orders.PushBack(*o)
+	oq.Orders.PushBack(o)
 }
 
 // Remove removes Order from the queue
 func (oq *OrderQueue) Remove(order *Order) bool {
-	index := oq.Orders.Index(func(o Order) bool {
+	index := oq.Orders.Index(func(o *Order) bool {
 		return o.ID() == order.ID()
 	})
 	return oq.RemoveIndex(index)
@@ -57,7 +57,7 @@ func (oq *OrderQueue) Remove(order *Order) bool {
 
 // RemoveByID removes Order from the queue
 func (oq *OrderQueue) RemoveByID(id string) bool {
-	index := oq.Orders.Index(func(order Order) bool {
+	index := oq.Orders.Index(func(order *Order) bool {
 		return order.ID() == id
 	})
 	return oq.RemoveIndex(index)
@@ -81,20 +81,7 @@ func (oq *OrderQueue) Slice() []Order {
 	for oq.Orders.Len() > 0 {
 		order := oq.Orders.PopFront()
 		oq.volume = oq.volume.Sub(order.Quantity())
-		slice = append(slice, order)
+		slice = append(slice, *order)
 	}
 	return slice
-}
-
-// DecreaseQuantity updates Order
-func (oq *OrderQueue) DecreaseQuantity(order Order, quantity decimal.Decimal) {
-	index := oq.Orders.Index(func(o Order) bool {
-		return o.ID() == order.ID()
-	})
-	if index != -1 {
-		order := oq.Orders.At(index)
-		order.DecreaseQuantity(quantity)
-		oq.Orders.Set(index, order)
-		oq.volume = oq.volume.Sub(quantity)
-	}
 }

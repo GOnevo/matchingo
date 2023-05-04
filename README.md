@@ -94,10 +94,10 @@ goarch: amd64
 cpu: Intel(R) Core(TM) i7-8565U CPU @ 1.80GHz
 BenchmarkLimitOrders-8 
 
-Elapsed: 1.176771449s
-Transactions per second (avg): 5184983.035733
+Elapsed: 1.202172189s
+Transactions per second (avg): 6326978.838470
+ 3803059               316.1 ns/op           512 B/op         10 allocs/op
 
-3050770               385.7 ns/op           544 B/op         10 allocs/op
 ```
 
 ### License

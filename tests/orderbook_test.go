@@ -24,20 +24,20 @@ func TestMarketQuantityQuoteProcessing(t *testing.T) {
 
 	ob.Process(matchingo.NewLimitOrder("order-1", matchingo.Sell, decimal.New(10, 0), decimal.New(10, 0), "", ""))
 
-	done, err := ob.Process(matchingo.NewMarketOrder("order-2", matchingo.Buy, decimal.New(100, 0)))
+	done, err := ob.Process(matchingo.NewMarketQuoteOrder("order-2", matchingo.Buy, decimal.New(100, 0)))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if done.Trade.Order.ID() != "order-2" {
+	if done.Order.ID() != "order-2" {
 		t.Fatal("Wrong order id")
 	}
 
-	if done.Trade.Orders["order-1"] == nil {
+	if done.GetTradeOrder("order-1") == nil {
 		t.Fatal("Wrong orders id")
 	}
 
-	if done.Trade.Orders["order-1"].Quantity.Equal(decimal.New(10, 0)) == false {
+	if done.GetTradeOrder("order-1").Quantity.Equal(decimal.New(10, 0)) == false {
 		t.Fatal("Wrong orders quantity")
 	}
 
@@ -56,11 +56,11 @@ func TestLimitFOKProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if done.Trade.Order.ID() != "order-b100" {
+	if done.Order.ID() != "order-b100" {
 		t.Fatal("Wrong done id")
 	}
 
-	if !done.Trade.Order.IsCanceled() {
+	if !done.Order.IsCanceled() {
 		t.Fatal("Wrong done canceled")
 	}
 
@@ -77,11 +77,11 @@ func TestLimitFOKProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if done.Trade.Order.ID() != "order-s100" {
+	if done.Order.ID() != "order-s100" {
 		t.Fatal("Wrong done id")
 	}
 
-	if !done.Trade.Order.IsCanceled() {
+	if !done.Order.IsCanceled() {
 		t.Fatal("Wrong done canceled")
 	}
 
@@ -103,7 +103,7 @@ func TestLimitIOCProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if done.Trade.Order.ID() != "order-ioc" {
+	if done.Order.ID() != "order-ioc" {
 		t.Fatal("Wrong done id")
 	}
 
@@ -129,7 +129,7 @@ func TestLimitPlace(t *testing.T) {
 	quantity := decimal.New(2, 0)
 	for i := 50; i < 100; i = i + 10 {
 		done, err := ob.Process(matchingo.NewLimitOrder(fmt.Sprintf("buy-%d", i), matchingo.Buy, quantity, decimal.New(int64(i), 0), "", ""))
-		if len(done.Trade.Orders) != 0 {
+		if len(done.Trades) != 0 {
 			t.Fatal("OrderBook failed to process limit order (participants is not empty)")
 		}
 		if done.Stored == false {
@@ -145,7 +145,7 @@ func TestLimitPlace(t *testing.T) {
 
 	for i := 100; i < 150; i = i + 10 {
 		done, err := ob.Process(matchingo.NewLimitOrder(fmt.Sprintf("sell-%d", i), matchingo.Sell, quantity, decimal.New(int64(i), 0), "", ""))
-		if len(done.Trade.Orders) != 0 {
+		if len(done.Trades) != 0 {
 			t.Fatal("OrderBook failed to process limit order (participants is not empty)")
 		}
 		if done.Stored == false {
@@ -169,7 +169,7 @@ func TestLimitProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if done.Trade.Order.ID() != "order-b100" {
+	if done.Order.ID() != "order-b100" {
 		t.Fatal("Wrong order id")
 	}
 
@@ -190,7 +190,7 @@ func TestLimitProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(done.Trade.Orders) != 5 {
+	if len(done.Trades) != 6 {
 		t.Fatal("Wrong participants count")
 	}
 
@@ -198,7 +198,7 @@ func TestLimitProcess(t *testing.T) {
 		t.Fatal("Wrong stored")
 	}
 
-	if done.Trade.Order.ID() != "order-b150" {
+	if done.Order.ID() != "order-b150" {
 		t.Fatal("Wrong order id")
 	}
 
@@ -215,7 +215,7 @@ func TestLimitProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(done.Trade.Orders) != 6 {
+	if len(done.Trades) != 7 {
 		t.Fatal("Wrong participants count")
 	}
 
@@ -241,7 +241,7 @@ func TestOCOProcessStop(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if done.Trade.Order.ID() != "simple-1" {
+	if done.Order.ID() != "simple-1" {
 		t.Fatal("Wrong order id")
 	}
 
@@ -270,11 +270,11 @@ func TestOCOProcessLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if done.Trade.Order.ID() != "simple-1" {
+	if done.Order.ID() != "simple-1" {
 		t.Fatal("Wrong order id")
 	}
 
-	if done.Trade.Orders["oco-2"] == nil {
+	if done.GetTradeOrder("oco-2") == nil {
 		t.Fatal("Wrong orders id")
 	}
 
@@ -296,14 +296,14 @@ func TestMarketProcess(t *testing.T) {
 	addDepth(ob, "", decimal.New(2, 0))
 
 	done, err := ob.Process(
-		matchingo.NewMarketOrder("order-buy-3", matchingo.Buy, decimal.New(300, 0)),
+		matchingo.NewMarketQuoteOrder("order-buy-3", matchingo.Buy, decimal.New(300, 0)),
 	)
 
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(done.Trade.Orders) != 2 {
+	if len(done.Trades) != 3 {
 		t.Fatal("Invalid participants length")
 	}
 
@@ -315,7 +315,7 @@ func TestMarketProcess(t *testing.T) {
 		t.Fatal("Wrong quantity processed")
 	}
 
-	if done.Trade.Order.IsCanceled() {
+	if done.Order.IsCanceled() {
 		t.Fatal("order is not canceled")
 	}
 
@@ -324,7 +324,7 @@ func TestMarketProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(done.Trade.Orders) != 5 {
+	if len(done.Trades) != 6 {
 		t.Fatal("Invalid participants length")
 	}
 
@@ -336,7 +336,7 @@ func TestMarketProcess(t *testing.T) {
 		t.Fatal("Wrong quantity processed")
 	}
 
-	if !done.Trade.Order.IsCanceled() {
+	if !done.Order.IsCanceled() {
 		t.Fatal("order is not canceled")
 	}
 }
@@ -413,24 +413,26 @@ func TestPriceCalculation(t *testing.T) {
 	}
 }
 
+var benchOb = matchingo.NewOrderBook()
+var BenchPrice = decimal.New(16, 0)
+var BenchQuantity = decimal.New(150, 0)
+
 func BenchmarkAppendLimitOrders(b *testing.B) {
-	ob := matchingo.NewOrderBook()
 	stopwatch := time.Now()
 	for i := 0; i < b.N; i++ {
-		ob.Process(matchingo.NewLimitOrder(fmt.Sprintf("buy-%d", i), matchingo.Buy, decimal.New(16, 0), decimal.New(10, 0), "", ""))
+		benchOb.Process(matchingo.NewLimitOrder(fmt.Sprintf("buy-%d", i), matchingo.Buy, BenchQuantity, BenchPrice, "", ""))
 	}
 	elapsed := time.Since(stopwatch)
 	fmt.Printf("Elapsed: %s\nTransactions per second (avg): %f\n", elapsed, float64(b.N*2)/elapsed.Seconds())
 }
 
 func BenchmarkLimitOrders(b *testing.B) {
-	ob := matchingo.NewOrderBook()
 	stopwatch := time.Now()
 	for i := 0; i < b.N; i++ {
-		ob.Process(matchingo.NewLimitOrder("order-buy", matchingo.Buy, decimal.New(16, 0), decimal.New(150, 0), "", ""))
+		benchOb.Process(matchingo.NewLimitOrder(fmt.Sprintf("sell-%d", i), matchingo.Sell, BenchQuantity, BenchPrice, "", ""))
 	}
 	for i := 0; i < b.N; i++ {
-		ob.Process(matchingo.NewLimitOrder("order-sell", matchingo.Sell, decimal.New(16, 0), decimal.New(150, 0), "", ""))
+		benchOb.Process(matchingo.NewLimitOrder(fmt.Sprintf("buy-%d", i), matchingo.Buy, BenchQuantity, BenchPrice, "", ""))
 	}
 	elapsed := time.Since(stopwatch)
 	fmt.Printf("Elapsed: %s\nTransactions per second (avg): %f\n", elapsed, float64(b.N*2)/elapsed.Seconds())

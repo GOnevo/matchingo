@@ -8,7 +8,8 @@ import (
 
 // Done structure
 type Done struct {
-	Trade     *Trade
+	Order     *Order
+	Trades    []*TradeOrder
 	Canceled  []string
 	Activated []string
 	Stored    bool
@@ -18,30 +19,52 @@ type Done struct {
 }
 
 type DoneJSON struct {
-	Trade struct {
-		Order  SimpleOrder   `json:"order"`
-		Orders []Participant `json:"orders"`
-	} `json:"trade"`
-	Canceled  []string `json:"canceled"`
-	Activated []string `json:"activated"`
-	Stored    bool     `json:"stored"`
-	Left      string   `json:"left"`
-	Processed string   `json:"processed"`
+	Order     TradeOrder   `json:"order"`
+	Trades    []TradeOrder `json:"trades"`
+	Canceled  []string     `json:"canceled"`
+	Activated []string     `json:"activated"`
+	Left      string       `json:"left"`
+	Processed string       `json:"processed"`
+	Stored    bool         `json:"stored"`
 }
 
 func newDone(order *Order) *Done {
 	return &Done{
-		Trade:     NewTrade(order),
-		Canceled:  []string{},
-		Activated: []string{},
+		Order:     order,
+		Trades:    make([]*TradeOrder, 0),
+		Canceled:  make([]string, 0),
+		Activated: make([]string, 0),
 		Quantity:  order.OriginalQty(),
 		Left:      decimal.Zero,
 		Processed: decimal.Zero,
 	}
 }
 
+// GetTradeOrder returns TradeOrder by id
+func (d *Done) GetTradeOrder(id string) *TradeOrder {
+	for _, t := range d.Trades {
+		if t.OrderID == id {
+			return t
+		}
+	}
+	return nil
+}
+
 func (d *Done) appendOrder(order *Order, quantity, price decimal.Decimal) {
-	d.Trade.Append(order, quantity, price)
+
+	if len(d.Trades) == 0 {
+		d.Trades = append(d.Trades, newTradeOrder(d.Order, decimal.Zero, d.Order.Price()))
+	}
+
+	d.Trades = append(d.Trades, newTradeOrder(order, quantity, price))
+}
+
+func (d *Done) tradesSlice() []TradeOrder {
+	slice := make([]TradeOrder, 0, len(d.Trades))
+	for _, v := range d.Trades {
+		slice = append(slice, *v)
+	}
+	return slice
 }
 
 func (d *Done) appendCanceled(order *Order) {
@@ -53,19 +76,22 @@ func (d *Done) appendActivated(order *Order) {
 }
 
 func (d *Done) setLeftQuantity(quantity *decimal.Decimal) {
-	if len(d.Trade.Orders) == 0 {
+	if len(d.Trades) == 0 {
 		return
 	}
 	d.Left = *quantity
 	d.Processed = d.Quantity.Sub(d.Left)
+	if len(d.Trades) != 0 {
+		d.Trades[0].Quantity = d.Processed
+	}
 }
 
 // ToJSON returns Done structure as JSON string
 func (d *Done) ToJSON() string {
 
 	jsonStruct := DoneJSON{}
-	jsonStruct.Trade.Order = *d.Trade.Order.ToSimple()
-	jsonStruct.Trade.Orders = d.Trade.OrdersSlice()
+	jsonStruct.Order = *d.Order.ToSimple()
+	jsonStruct.Trades = d.tradesSlice()
 	jsonStruct.Stored = d.Stored
 	jsonStruct.Left = d.Left.String()
 	jsonStruct.Processed = d.Processed.String()

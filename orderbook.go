@@ -67,7 +67,7 @@ func (ob *OrderBook) processMarketOrder(marketOrder *Order) (done *Done, err err
 
 	for quantity.Sign() > 0 && sideToProcess.Len() > 0 {
 		bestPrice := iter()
-		if marketOrder.Side() == Buy {
+		if marketOrder.IsQuote() {
 			quantity = ob.processQueueQuote(bestPrice, quantity, done)
 		} else {
 			quantity = ob.processQueue(bestPrice, quantity, done)
@@ -88,7 +88,6 @@ func (ob *OrderBook) processMarketOrder(marketOrder *Order) (done *Done, err err
 func (ob *OrderBook) processLimitOrder(limitOrder *Order) (done *Done, err error) {
 
 	quantity := limitOrder.Quantity()
-	tif := limitOrder.TIF()
 
 	if _, ok := ob.orders[limitOrder.ID()]; ok {
 		return nil, ErrOrderExists
@@ -116,7 +115,7 @@ func (ob *OrderBook) processLimitOrder(limitOrder *Order) (done *Done, err error
 		return
 	}
 
-	if tif == FOK {
+	if limitOrder.TIF() == FOK {
 		if !sideToProcess.CanOrderBeFilled(limitOrder.Side(), limitOrder.price, quantity) {
 			limitOrder.Cancel()
 			done.appendCanceled(limitOrder)
@@ -146,9 +145,9 @@ func (ob *OrderBook) processLimitOrder(limitOrder *Order) (done *Done, err error
 	}
 
 	// If IOC Order was not fulfilled then cancel it
-	if tif == IOC && quantity.Sign() == 1 {
-		canceledOrder := ob.CancelOrder(limitOrder.ID())
-		done.appendCanceled(canceledOrder)
+	if limitOrder.TIF() == IOC && quantity.Sign() == 1 {
+		limitOrder.SetTaker()
+		done.appendCanceled(ob.CancelOrder(limitOrder.ID()))
 		done.Stored = false
 	}
 
@@ -205,13 +204,13 @@ func (ob *OrderBook) processQueue(orderQueue *OrderQueue, quantity decimal.Decim
 		o := orderQueue.First()
 		orderQuantity := o.Quantity()
 		if quantity.LessThan(orderQuantity) {
-			done.appendOrder(&o, quantity, price)
-			orderQueue.DecreaseQuantity(o, quantity)
+			done.appendOrder(o, quantity, price)
+			o.DecreaseQuantity(quantity)
 			quantity = decimal.Zero
 		} else {
-			ob.appendToOCO(&o, done)
-			ob.DeleteOrder(&o)
-			done.appendOrder(&o, orderQuantity, price)
+			ob.appendToOCO(o, done)
+			ob.DeleteOrder(o)
+			done.appendOrder(o, orderQuantity, price)
 			quantity = quantity.Sub(orderQuantity)
 		}
 	}

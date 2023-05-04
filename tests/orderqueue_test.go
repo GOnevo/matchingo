@@ -166,7 +166,7 @@ func TestOrderQueueUpdate(t *testing.T) {
 	oq.Append(o2)
 
 	headOrder := oq.First()
-	oq.DecreaseQuantity(headOrder, decimal.New(55, 0))
+	headOrder.DecreaseQuantity(decimal.New(55, 0))
 
 	headOrder = oq.First()
 
@@ -175,17 +175,17 @@ func TestOrderQueueUpdate(t *testing.T) {
 	}
 }
 
+var BenchOrderQueue = matchingo.NewOrderQueue(BenchPrice)
+
 func BenchmarkOrderQueue(b *testing.B) {
-	price := decimal.New(100, 0)
-	orderQueue := matchingo.NewOrderQueue(price)
 	stopwatch := time.Now()
 
-	for i := 0; i < b.N; i++ {
-		orderQueue.Append(matchingo.NewLimitOrder(
+	for i := 1; i < b.N; i++ {
+		BenchOrderQueue.Append(matchingo.NewLimitOrder(
 			fmt.Sprintf("order-%d", i),
 			matchingo.Buy,
-			price,
 			decimal.NewFromInt(int64(i)),
+			BenchPrice,
 			"",
 			"",
 		))

@@ -2,17 +2,30 @@ package matchingo
 
 import (
 	"fmt"
-	"time"
-
 	"github.com/shopspring/decimal"
 )
 
-// SimpleOrder structure
-type SimpleOrder struct {
-	OrderID  string `json:"orderID"`
-	Role     string `json:"role"`
-	Quantity string `json:"quantity"`
-	Price    string `json:"price"`
+// TradeOrder structure
+type TradeOrder struct {
+	OrderID  string          `json:"orderID"`
+	Role     Role            `json:"role"`
+	Price    decimal.Decimal `json:"price"`
+	IsQuote  bool            `json:"isQuote"`
+	Quantity decimal.Decimal `json:"quantity"`
+}
+
+func (p *TradeOrder) String() string {
+	return "\t" + p.OrderID + "|price:" + p.Price.String() + "|q:" + p.Quantity.String() + "|role:" + string(p.Role)
+}
+
+func newTradeOrder(order *Order, quantity, price decimal.Decimal) *TradeOrder {
+	return &TradeOrder{
+		OrderID:  order.ID(),
+		Role:     order.Role(),
+		Price:    price,
+		IsQuote:  order.IsQuote(),
+		Quantity: quantity,
+	}
 }
 
 // Order stores information about order
@@ -20,7 +33,7 @@ type Order struct {
 	id          string
 	orderType   OrderType
 	side        Side
-	timestamp   time.Time
+	isQuote     bool
 	quantity    decimal.Decimal
 	originalQty decimal.Decimal
 	price       decimal.Decimal
@@ -43,10 +56,28 @@ func NewMarketOrder(orderID string, side Side, quantity decimal.Decimal) *Order 
 		orderType:   TypeMarket,
 		side:        side,
 		quantity:    quantity,
-		originalQty: quantity.Copy(),
+		originalQty: quantity,
 		price:       decimal.Zero,
-		timestamp:   time.Now().UTC(),
 		canceled:    false,
+	}
+}
+
+// NewMarketQuoteOrder creates new constant object Order, but quantity is in Quote mode
+func NewMarketQuoteOrder(orderID string, side Side, quantity decimal.Decimal) *Order {
+
+	if quantity.Sign() <= 0 {
+		panic(ErrInvalidQuantity)
+	}
+
+	return &Order{
+		id:          orderID,
+		orderType:   TypeMarket,
+		side:        side,
+		quantity:    quantity,
+		originalQty: quantity,
+		price:       decimal.Zero,
+		canceled:    false,
+		isQuote:     true,
 	}
 }
 
@@ -70,9 +101,8 @@ func NewLimitOrder(orderID string, side Side, quantity, price decimal.Decimal, t
 		orderType:   TypeLimit,
 		side:        side,
 		quantity:    quantity,
-		originalQty: quantity.Copy(),
+		originalQty: quantity,
 		price:       price,
-		timestamp:   time.Now().UTC(),
 		canceled:    false,
 		oco:         oco,
 		tif:         tif,
@@ -95,9 +125,8 @@ func NewStopLimitOrder(orderID string, side Side, quantity, price, stop decimal.
 		orderType:   TypeStopLimit,
 		side:        side,
 		quantity:    quantity,
-		originalQty: quantity.Copy(),
+		originalQty: quantity,
 		price:       price,
-		timestamp:   time.Now().UTC(),
 		canceled:    false,
 		stop:        stop,
 		oco:         oco,
@@ -112,6 +141,11 @@ func (o *Order) ID() string {
 // Side returns side of the Order
 func (o *Order) Side() Side {
 	return o.side
+}
+
+// IsQuote returns isQuote field copy
+func (o *Order) IsQuote() bool {
+	return o.isQuote
 }
 
 // Quantity returns Quantity field copy
@@ -142,11 +176,6 @@ func (o *Order) Price() decimal.Decimal {
 // StopPrice returns Price field copy
 func (o *Order) StopPrice() decimal.Decimal {
 	return o.stop
-}
-
-// Time returns timestamp field copy
-func (o *Order) Time() time.Time {
-	return o.timestamp
 }
 
 // OCO returns reference ID
@@ -202,6 +231,11 @@ func (o *Order) SetMaker() {
 	o.role = MAKER
 }
 
+// SetTaker sets Taker role
+func (o *Order) SetTaker() {
+	o.role = TAKER
+}
+
 // Role returns role of Order
 func (o *Order) Role() Role {
 	if o.role == MAKER {
@@ -211,17 +245,18 @@ func (o *Order) Role() Role {
 	return TAKER
 }
 
-// ToSimple returns Simple version of order
-func (o *Order) ToSimple() *SimpleOrder {
-	return &SimpleOrder{
+// ToSimple returns TradeOrder
+func (o *Order) ToSimple() *TradeOrder {
+	return &TradeOrder{
 		OrderID:  o.ID(),
-		Role:     string(o.Role()),
-		Quantity: o.Quantity().String(),
-		Price:    o.Price().String(),
+		Role:     o.Role(),
+		IsQuote:  o.IsQuote(),
+		Quantity: o.Quantity(),
+		Price:    o.Price(),
 	}
 }
 
 // String implements Stringer interface
 func (o *Order) String() string {
-	return fmt.Sprintf("\n\"%s\":\n\ttype: %s\n\tside: %s\n\tquantity: %s\n\toriginalQty: %s\n\tprice: %s\n\ttime: %s\n\tcanceled: %t\n\trole: %s\n", o.ID(), o.orderType, o.Side(), o.Quantity(), o.OriginalQty(), o.Price(), o.Time(), o.IsCanceled(), o.Role())
+	return fmt.Sprintf("\n\"%s\":\n\ttype: %s\n\tside: %s\n\tisQuote: %t\n\tquantity: %s\n\toriginalQty: %s\n\tprice: %s\n\tcanceled: %t\n\trole: %s\n", o.ID(), o.orderType, o.Side(), o.IsQuote(), o.Quantity(), o.OriginalQty(), o.Price(), o.IsCanceled(), o.Role())
 }
