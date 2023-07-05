@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/gonevo/matchingo"
-	"github.com/shopspring/decimal"
+	"github.com/nikolaydubina/fpdecimal"
 )
 
 func TestOrder_Market(t *testing.T) {
@@ -15,7 +15,7 @@ func TestOrder_Market(t *testing.T) {
 			}
 		}()
 
-		matchingo.NewMarketOrder("id", matchingo.Buy, decimal.New(-1, 0))
+		matchingo.NewMarketOrder("id", matchingo.Buy, fpdecimal.FromInt(-1))
 	}()
 }
 
@@ -27,7 +27,7 @@ func TestOrder_Stop(t *testing.T) {
 			}
 		}()
 
-		matchingo.NewStopLimitOrder("id", matchingo.Buy, decimal.New(1, 0), decimal.New(1, 0), decimal.New(0, 0), "")
+		matchingo.NewStopLimitOrder("id", matchingo.Buy, fpdecimal.FromInt(1), fpdecimal.FromInt(1), fpdecimal.FromInt(0), "")
 	}()
 
 	func() {
@@ -37,7 +37,7 @@ func TestOrder_Stop(t *testing.T) {
 			}
 		}()
 
-		matchingo.NewStopLimitOrder("id", matchingo.Buy, decimal.New(1, 0), decimal.New(0, 0), decimal.New(1, 0), "")
+		matchingo.NewStopLimitOrder("id", matchingo.Buy, fpdecimal.FromInt(1), fpdecimal.FromInt(0), fpdecimal.FromInt(1), "")
 	}()
 
 	func() {
@@ -47,7 +47,7 @@ func TestOrder_Stop(t *testing.T) {
 			}
 		}()
 
-		matchingo.NewStopLimitOrder("id", matchingo.Buy, decimal.New(0, 0), decimal.New(1, 0), decimal.New(1, 0), "")
+		matchingo.NewStopLimitOrder("id", matchingo.Buy, fpdecimal.FromInt(0), fpdecimal.FromInt(1), fpdecimal.FromInt(1), "")
 	}()
 }
 
@@ -59,7 +59,7 @@ func TestOrder_Limit(t *testing.T) {
 			}
 		}()
 
-		matchingo.NewLimitOrder("id", matchingo.Buy, decimal.New(0, 0), decimal.New(1, 0), "", "")
+		matchingo.NewLimitOrder("id", matchingo.Buy, fpdecimal.FromInt(0), fpdecimal.FromInt(1), "", "")
 	}()
 
 	func() {
@@ -69,7 +69,7 @@ func TestOrder_Limit(t *testing.T) {
 			}
 		}()
 
-		matchingo.NewLimitOrder("id", matchingo.Buy, decimal.New(1, 0), decimal.New(0, 0), "", "")
+		matchingo.NewLimitOrder("id", matchingo.Buy, fpdecimal.FromInt(1), fpdecimal.FromInt(0), "", "")
 	}()
 
 	func() {
@@ -79,6 +79,6 @@ func TestOrder_Limit(t *testing.T) {
 			}
 		}()
 
-		matchingo.NewLimitOrder("id", matchingo.Buy, decimal.New(1, 0), decimal.New(1, 0), "FAKE", "")
+		matchingo.NewLimitOrder("id", matchingo.Buy, fpdecimal.FromInt(1), fpdecimal.FromInt(1), "FAKE", "")
 	}()
 }

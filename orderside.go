@@ -5,20 +5,20 @@ import (
 	"strings"
 
 	"github.com/hashicorp/go-set"
-	"github.com/shopspring/decimal"
+	"github.com/nikolaydubina/fpdecimal"
 )
 
 // Level contains Price and Volume in depth
 type Level struct {
-	Price  decimal.Decimal `json:"Price"`
-	Volume decimal.Decimal `json:"Volume"`
+	Price  fpdecimal.Decimal `json:"Price"`
+	Volume fpdecimal.Decimal `json:"Volume"`
 }
 
 // OrderSide implements facade to operations with Order queue
 type OrderSide struct {
-	orderedPrices *set.TreeSet[decimal.Decimal, set.Compare[decimal.Decimal]]
-	prices        map[string]*OrderQueue
-	volume        decimal.Decimal
+	orderedPrices *set.TreeSet[fpdecimal.Decimal, set.Compare[fpdecimal.Decimal]]
+	prices        map[fpdecimal.Decimal]*OrderQueue
+	volume        fpdecimal.Decimal
 	numOrders     int
 	depth         int
 }
@@ -26,22 +26,22 @@ type OrderSide struct {
 // NewOrderSideAsk creates new OrderSide manager
 func NewOrderSideAsk() *OrderSide {
 	return &OrderSide{
-		orderedPrices: set.NewTreeSet[decimal.Decimal, set.Compare[decimal.Decimal]](func(a decimal.Decimal, b decimal.Decimal) int {
-			return a.Cmp(b)
+		orderedPrices: set.NewTreeSet[fpdecimal.Decimal, set.Compare[fpdecimal.Decimal]](func(a fpdecimal.Decimal, b fpdecimal.Decimal) int {
+			return a.Compare(b)
 		}),
-		prices: map[string]*OrderQueue{},
-		volume: decimal.Zero,
+		prices: map[fpdecimal.Decimal]*OrderQueue{},
+		volume: fpdecimal.Zero,
 	}
 }
 
 // NewOrderSideBid creates new OrderSide manager
 func NewOrderSideBid() *OrderSide {
 	return &OrderSide{
-		orderedPrices: set.NewTreeSet[decimal.Decimal, set.Compare[decimal.Decimal]](func(a decimal.Decimal, b decimal.Decimal) int {
-			return b.Cmp(a)
+		orderedPrices: set.NewTreeSet[fpdecimal.Decimal, set.Compare[fpdecimal.Decimal]](func(a fpdecimal.Decimal, b fpdecimal.Decimal) int {
+			return b.Compare(a)
 		}),
-		prices: map[string]*OrderQueue{},
-		volume: decimal.Zero,
+		prices: map[fpdecimal.Decimal]*OrderQueue{},
+		volume: fpdecimal.Zero,
 	}
 }
 
@@ -56,7 +56,7 @@ func (os *OrderSide) Depth() int {
 }
 
 // Volume returns total amount of Volume in side
-func (os *OrderSide) Volume() decimal.Decimal {
+func (os *OrderSide) Volume() fpdecimal.Decimal {
 	return os.volume
 }
 
@@ -66,12 +66,11 @@ func (os *OrderSide) Append(o *Order) {
 	o.SetMaker()
 
 	price := o.Price()
-	strPrice := price.String()
 
-	priceQueue, ok := os.prices[strPrice]
+	priceQueue, ok := os.prices[price]
 	if !ok {
 		priceQueue = NewOrderQueue(price)
-		os.prices[strPrice] = priceQueue
+		os.prices[price] = priceQueue
 		os.orderedPrices.Insert(price)
 		os.depth++
 	}
@@ -83,13 +82,12 @@ func (os *OrderSide) Append(o *Order) {
 // Remove removes Order from definite Price level
 func (os *OrderSide) Remove(order *Order) *Order {
 	price := order.Price()
-	strPrice := price.String()
 
-	priceQueue := os.prices[strPrice]
+	priceQueue := os.prices[price]
 	priceQueue.Remove(order)
 
 	if priceQueue.Len() == 0 {
-		delete(os.prices, strPrice)
+		delete(os.prices, price)
 		os.orderedPrices.Remove(price)
 		os.depth--
 	}
@@ -100,12 +98,12 @@ func (os *OrderSide) Remove(order *Order) *Order {
 }
 
 // Prices returns slice of prices
-func (os *OrderSide) Prices() []decimal.Decimal {
+func (os *OrderSide) Prices() []fpdecimal.Decimal {
 	return os.orderedPrices.Slice()
 }
 
 // CanOrderBeFilled checks FOK
-func (os *OrderSide) CanOrderBeFilled(side Side, priceLevel, quantity decimal.Decimal) bool {
+func (os *OrderSide) CanOrderBeFilled(side Side, priceLevel, quantity fpdecimal.Decimal) bool {
 	if side == Buy {
 		return os.CanBuyOrderBeFilled(priceLevel, quantity)
 	}
@@ -118,16 +116,16 @@ func (os *OrderSide) CanOrderBeFilled(side Side, priceLevel, quantity decimal.De
 }
 
 // CanBuyOrderBeFilled checks FOK Orders
-func (os *OrderSide) CanBuyOrderBeFilled(priceLevel, quantity decimal.Decimal) bool {
+func (os *OrderSide) CanBuyOrderBeFilled(priceLevel, quantity fpdecimal.Decimal) bool {
 
 	if quantity.GreaterThan(os.Volume()) {
 		return false
 	}
 
-	volume := decimal.Zero
+	volume := fpdecimal.Zero
 	for _, price := range os.Prices() {
 		if price.LessThanOrEqual(priceLevel) && volume.LessThan(quantity) {
-			volume = volume.Add(os.prices[price.String()].Volume())
+			volume = volume.Add(os.prices[price].Volume())
 		} else {
 			break
 		}
@@ -137,16 +135,16 @@ func (os *OrderSide) CanBuyOrderBeFilled(priceLevel, quantity decimal.Decimal) b
 }
 
 // CanSellOrderBeFilled checks FOK Orders
-func (os *OrderSide) CanSellOrderBeFilled(priceLevel, quantity decimal.Decimal) bool {
+func (os *OrderSide) CanSellOrderBeFilled(priceLevel, quantity fpdecimal.Decimal) bool {
 
 	if quantity.GreaterThan(os.Volume()) {
 		return false
 	}
 
-	volume := decimal.Zero
+	volume := fpdecimal.Zero
 	for _, price := range os.Prices() {
 		if price.GreaterThanOrEqual(priceLevel) && volume.LessThan(quantity) {
-			volume = volume.Add(os.prices[price.String()].Volume())
+			volume = volume.Add(os.prices[price].Volume())
 		} else {
 			break
 		}
@@ -158,19 +156,19 @@ func (os *OrderSide) CanSellOrderBeFilled(priceLevel, quantity decimal.Decimal) 
 // BestPriceQueue returns best Orders queue
 func (os *OrderSide) BestPriceQueue() *OrderQueue {
 	if os.depth > 0 && !os.orderedPrices.Empty() {
-		return os.prices[os.orderedPrices.Min().String()]
+		return os.prices[os.orderedPrices.Min()]
 	}
 	return nil
 }
 
 // NextLevel returns next Orders queue after level
-func (os *OrderSide) NextLevel(level decimal.Decimal) *OrderQueue {
+func (os *OrderSide) NextLevel(level fpdecimal.Decimal) *OrderQueue {
 	if os.depth > 0 && !os.orderedPrices.Empty() {
 		price, ok := os.orderedPrices.FirstAbove(level)
 		if !ok {
 			return nil
 		}
-		return os.prices[price.String()]
+		return os.prices[price]
 	}
 	return nil
 }
@@ -184,8 +182,8 @@ func (os *OrderSide) String() string {
 			fmt.Sprintf(
 				"\n%s -> size: %d, volume: %s",
 				price,
-				os.prices[price.String()].Len(),
-				os.prices[price.String()].Volume(),
+				os.prices[price].Len(),
+				os.prices[price].Volume(),
 			),
 		)
 	}

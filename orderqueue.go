@@ -2,21 +2,21 @@ package matchingo
 
 import (
 	"github.com/gammazero/deque"
-	"github.com/shopspring/decimal"
+	"github.com/nikolaydubina/fpdecimal"
 )
 
 // OrderQueue stores and manage chain of Orders
 type OrderQueue struct {
-	volume decimal.Decimal
-	price  decimal.Decimal
+	volume fpdecimal.Decimal
+	price  fpdecimal.Decimal
 	Orders *deque.Deque[*Order]
 }
 
 // NewOrderQueue creates and initialize OrderQueue object
-func NewOrderQueue(price decimal.Decimal) *OrderQueue {
+func NewOrderQueue(price fpdecimal.Decimal) *OrderQueue {
 	return &OrderQueue{
 		price:  price,
-		volume: decimal.Zero,
+		volume: fpdecimal.Zero,
 		Orders: deque.New[*Order](),
 	}
 }
@@ -27,12 +27,12 @@ func (oq *OrderQueue) Len() int {
 }
 
 // Price returns Price level of the queue
-func (oq *OrderQueue) Price() decimal.Decimal {
+func (oq *OrderQueue) Price() fpdecimal.Decimal {
 	return oq.price
 }
 
 // Volume returns total Orders volume
-func (oq *OrderQueue) Volume() decimal.Decimal {
+func (oq *OrderQueue) Volume() fpdecimal.Decimal {
 	return oq.volume
 }
 

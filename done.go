@@ -3,7 +3,7 @@ package matchingo
 import (
 	"encoding/json"
 
-	"github.com/shopspring/decimal"
+	"github.com/nikolaydubina/fpdecimal"
 )
 
 // Done structure
@@ -13,11 +13,12 @@ type Done struct {
 	Canceled  []string
 	Activated []string
 	Stored    bool
-	Quantity  decimal.Decimal
-	Left      decimal.Decimal
-	Processed decimal.Decimal
+	Quantity  fpdecimal.Decimal
+	Left      fpdecimal.Decimal
+	Processed fpdecimal.Decimal
 }
 
+// DoneJSON structure
 type DoneJSON struct {
 	Order     TradeOrder   `json:"order"`
 	Trades    []TradeOrder `json:"trades"`
@@ -35,8 +36,8 @@ func newDone(order *Order) *Done {
 		Canceled:  make([]string, 0),
 		Activated: make([]string, 0),
 		Quantity:  order.OriginalQty(),
-		Left:      decimal.Zero,
-		Processed: decimal.Zero,
+		Left:      fpdecimal.Zero,
+		Processed: fpdecimal.Zero,
 	}
 }
 
@@ -50,10 +51,10 @@ func (d *Done) GetTradeOrder(id string) *TradeOrder {
 	return nil
 }
 
-func (d *Done) appendOrder(order *Order, quantity, price decimal.Decimal) {
+func (d *Done) appendOrder(order *Order, quantity, price fpdecimal.Decimal) {
 
 	if len(d.Trades) == 0 {
-		d.Trades = append(d.Trades, newTradeOrder(d.Order, decimal.Zero, d.Order.Price()))
+		d.Trades = append(d.Trades, newTradeOrder(d.Order, fpdecimal.Zero, d.Order.Price()))
 	}
 
 	d.Trades = append(d.Trades, newTradeOrder(order, quantity, price))
@@ -75,7 +76,7 @@ func (d *Done) appendActivated(order *Order) {
 	d.Activated = append(d.Activated, order.ID())
 }
 
-func (d *Done) setLeftQuantity(quantity *decimal.Decimal) {
+func (d *Done) setLeftQuantity(quantity *fpdecimal.Decimal) {
 	if len(d.Trades) == 0 {
 		return
 	}

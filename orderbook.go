@@ -1,8 +1,6 @@
 package matchingo
 
-import (
-	"github.com/shopspring/decimal"
-)
+import "github.com/nikolaydubina/fpdecimal"
 
 // OrderBook implements standard matching algorithm
 type OrderBook struct {
@@ -46,7 +44,7 @@ func (ob *OrderBook) processMarketOrder(marketOrder *Order) (done *Done, err err
 	side := marketOrder.Side()
 	quantity := marketOrder.quantity
 
-	if quantity.Sign() <= 0 {
+	if quantity.LessThanOrEqual(fpdecimal.Zero) {
 		return nil, ErrInvalidQuantity
 	}
 
@@ -65,7 +63,7 @@ func (ob *OrderBook) processMarketOrder(marketOrder *Order) (done *Done, err err
 
 	done = newDone(marketOrder)
 
-	for quantity.Sign() > 0 && sideToProcess.Len() > 0 {
+	for quantity.GreaterThan(fpdecimal.Zero) && sideToProcess.Len() > 0 {
 		bestPrice := iter()
 		if marketOrder.IsQuote() {
 			quantity = ob.processQueueQuote(bestPrice, quantity, done)
@@ -77,7 +75,7 @@ func (ob *OrderBook) processMarketOrder(marketOrder *Order) (done *Done, err err
 	done.setLeftQuantity(&quantity)
 
 	// If market Order was not fulfilled then cancel it
-	if done.Left.Sign() == 1 {
+	if done.Left.GreaterThan(fpdecimal.Zero) {
 		marketOrder.Cancel()
 		done.appendCanceled(marketOrder)
 	}
@@ -95,7 +93,7 @@ func (ob *OrderBook) processLimitOrder(limitOrder *Order) (done *Done, err error
 
 	var (
 		sideToProcess *OrderSide
-		comparator    func(decimal.Decimal) bool
+		comparator    func(fpdecimal.Decimal) bool
 		iter          func() *OrderQueue
 	)
 
@@ -125,15 +123,15 @@ func (ob *OrderBook) processLimitOrder(limitOrder *Order) (done *Done, err error
 
 	bestPrice := iter()
 
-	for quantity.Sign() > 0 && sideToProcess.Len() > 0 && comparator(bestPrice.Price()) {
+	for quantity.GreaterThan(fpdecimal.Zero) && sideToProcess.Len() > 0 && comparator(bestPrice.Price()) {
 		quantity = ob.processQueue(bestPrice, quantity, done)
 		bestPrice = iter()
 	}
 
 	done.setLeftQuantity(&quantity)
 
-	if done.Left.Sign() > 0 || done.Processed.Equal(decimal.Zero) {
-		if done.Left.Sign() > 0 {
+	if done.Left.GreaterThan(fpdecimal.Zero) || done.Processed.Equal(fpdecimal.Zero) {
+		if done.Left.GreaterThan(fpdecimal.Zero) {
 			limitOrder.SetQuantity(done.Left)
 		} else {
 			limitOrder.SetQuantity(done.Quantity)
@@ -145,7 +143,7 @@ func (ob *OrderBook) processLimitOrder(limitOrder *Order) (done *Done, err error
 	}
 
 	// If IOC Order was not fulfilled then cancel it
-	if limitOrder.TIF() == IOC && quantity.Sign() == 1 {
+	if limitOrder.TIF() == IOC && quantity.GreaterThan(fpdecimal.Zero) {
 		limitOrder.SetTaker()
 		done.appendCanceled(ob.CancelOrder(limitOrder.ID()))
 		done.Stored = false
@@ -177,7 +175,7 @@ func (ob *OrderBook) appendLimitOrder(order *Order) {
 	panic("order has not LIMIT type")
 }
 
-func (ob *OrderBook) activateStopOrders(price decimal.Decimal) []*Order {
+func (ob *OrderBook) activateStopOrders(price fpdecimal.Decimal) []*Order {
 	var activated []*Order
 	orders := ob.Stop.Activate(price)
 	for _, order := range orders {
@@ -189,24 +187,24 @@ func (ob *OrderBook) activateStopOrders(price decimal.Decimal) []*Order {
 	return activated
 }
 
-func (ob *OrderBook) processQueueQuote(bestPrice *OrderQueue, quantity decimal.Decimal, done *Done) decimal.Decimal {
+func (ob *OrderBook) processQueueQuote(bestPrice *OrderQueue, quantity fpdecimal.Decimal, done *Done) fpdecimal.Decimal {
 	return ob.adaptQuantityQuote(
 		ob.processQueue(bestPrice, ob.adaptQuantityBase(quantity, bestPrice.Price()), done), bestPrice.Price(),
 	)
 }
 
-func (ob *OrderBook) processQueue(orderQueue *OrderQueue, quantity decimal.Decimal, done *Done) decimal.Decimal {
+func (ob *OrderBook) processQueue(orderQueue *OrderQueue, quantity fpdecimal.Decimal, done *Done) fpdecimal.Decimal {
 	touch := false
 	price := orderQueue.Price()
 
-	for quantity.Sign() > 0 && orderQueue.Len() > 0 {
+	for quantity.GreaterThan(fpdecimal.Zero) && orderQueue.Len() > 0 {
 		touch = true
 		o := orderQueue.First()
 		orderQuantity := o.Quantity()
 		if quantity.LessThan(orderQuantity) {
 			done.appendOrder(o, quantity, price)
 			o.DecreaseQuantity(quantity)
-			quantity = decimal.Zero
+			quantity = fpdecimal.Zero
 		} else {
 			ob.appendToOCO(o, done)
 			ob.DeleteOrder(o)
@@ -225,11 +223,11 @@ func (ob *OrderBook) processQueue(orderQueue *OrderQueue, quantity decimal.Decim
 	return quantity
 }
 
-func (ob *OrderBook) adaptQuantityBase(quantity, price decimal.Decimal) decimal.Decimal {
+func (ob *OrderBook) adaptQuantityBase(quantity, price fpdecimal.Decimal) fpdecimal.Decimal {
 	return quantity.Div(price)
 }
 
-func (ob *OrderBook) adaptQuantityQuote(quantity, price decimal.Decimal) decimal.Decimal {
+func (ob *OrderBook) adaptQuantityQuote(quantity, price fpdecimal.Decimal) fpdecimal.Decimal {
 	return quantity.Mul(price)
 }
 
@@ -358,8 +356,8 @@ func (ob *OrderBook) cancelOCO(orderID string, done *Done) {
 
 // CalculateMarketPrice returns total market Price for requested Volume
 // if err is not nil Price returns total Price of all levels in side
-func (ob *OrderBook) CalculateMarketPrice(side Side, quantity decimal.Decimal) (price decimal.Decimal, err error) {
-	price = decimal.Zero
+func (ob *OrderBook) CalculateMarketPrice(side Side, quantity fpdecimal.Decimal) (price fpdecimal.Decimal, err error) {
+	price = fpdecimal.Zero
 
 	var orders *OrderSide
 	if side == Buy {
@@ -371,7 +369,7 @@ func (ob *OrderBook) CalculateMarketPrice(side Side, quantity decimal.Decimal) (
 	level := orders.BestPriceQueue()
 	iter := orders.NextLevel
 
-	for quantity.Sign() > 0 && level != nil {
+	for quantity.GreaterThan(fpdecimal.Zero) && level != nil {
 		levelVolume := level.Volume()
 		levelPrice := level.Price()
 		if quantity.GreaterThanOrEqual(levelVolume) {
@@ -380,11 +378,11 @@ func (ob *OrderBook) CalculateMarketPrice(side Side, quantity decimal.Decimal) (
 			level = iter(levelPrice)
 		} else {
 			price = price.Add(levelPrice.Mul(quantity))
-			quantity = decimal.Zero
+			quantity = fpdecimal.Zero
 		}
 	}
 
-	if quantity.Sign() > 0 {
+	if quantity.GreaterThan(fpdecimal.Zero) {
 		err = ErrInsufficientQuantity
 	}
 

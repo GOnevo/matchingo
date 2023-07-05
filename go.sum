@@ -3,6 +3,6 @@ github.com/gammazero/deque v0.2.1/go.mod h1:LFroj8x4cMYCukHJDbxFCkT+r9AndaJnFMuZ
 github.com/google/go-cmp v0.5.9 h1:O2Tfq5qg4qc4AmwVlvv0oLiVAGB7enBSJ2x2DqQFi38=
 github.com/hashicorp/go-set v0.1.12 h1:ghg3RoSWfRkP6efWp6w7pcjPs478/i/vFLwVOJt4I0I=
 github.com/hashicorp/go-set v0.1.12/go.mod h1:BaYYjrI6m7H3D0j+N5Z0rZkCbBXOgNtuoDHrMJfORsk=
+github.com/nikolaydubina/fpdecimal v0.16.0 h1:Yyrb48gl11+B5x4MwkMbw9PxH8nRl9ee3hk3SUi5CAQ=
+github.com/nikolaydubina/fpdecimal v0.16.0/go.mod h1:DnymrWgQuyolIeAIwYvtXgA+NBSwzZ7iC08GshRaeB4=
 github.com/shoenig/test v0.6.3 h1:GVXWJFk9PiOjN0KoJ7VrJGH6uLPnqxR7/fe3HUPfE0c=
-github.com/shopspring/decimal v1.3.1 h1:2Usl1nmF/WZucqkFZhnfFYxxxu8LG21F6nPQBE5gKV8=
-github.com/shopspring/decimal v1.3.1/go.mod h1:DKyhrW/HYNuLGql+MJL6WCR6knT2jwCFRcu2hWCYk4o=

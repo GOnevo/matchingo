@@ -6,25 +6,25 @@ import (
 	"time"
 
 	"github.com/gonevo/matchingo"
-	"github.com/shopspring/decimal"
+	"github.com/nikolaydubina/fpdecimal"
 )
 
-func addDepth(ob *matchingo.OrderBook, prefix string, quantity decimal.Decimal) {
+func addDepth(ob *matchingo.OrderBook, prefix string, quantity fpdecimal.Decimal) {
 	for i := 50; i < 100; i = i + 10 {
-		ob.Process(matchingo.NewLimitOrder(fmt.Sprintf("%sbuy-%d", prefix, i), matchingo.Buy, quantity, decimal.New(int64(i), 0), "", ""))
+		ob.Process(matchingo.NewLimitOrder(fmt.Sprintf("%sbuy-%d", prefix, i), matchingo.Buy, quantity, fpdecimal.FromInt(int64(i)), "", ""))
 	}
 
 	for i := 100; i < 150; i = i + 10 {
-		ob.Process(matchingo.NewLimitOrder(fmt.Sprintf("%ssell-%d", prefix, i), matchingo.Sell, quantity, decimal.New(int64(i), 0), "", ""))
+		ob.Process(matchingo.NewLimitOrder(fmt.Sprintf("%ssell-%d", prefix, i), matchingo.Sell, quantity, fpdecimal.FromInt(int64(i)), "", ""))
 	}
 }
 
 func TestMarketQuantityQuoteProcessing(t *testing.T) {
 	ob := matchingo.NewOrderBook()
 
-	ob.Process(matchingo.NewLimitOrder("order-1", matchingo.Sell, decimal.New(10, 0), decimal.New(10, 0), "", ""))
+	ob.Process(matchingo.NewLimitOrder("order-1", matchingo.Sell, fpdecimal.FromInt(10), fpdecimal.FromInt(10), "", ""))
 
-	done, err := ob.Process(matchingo.NewMarketQuoteOrder("order-2", matchingo.Buy, decimal.New(100, 0)))
+	done, err := ob.Process(matchingo.NewMarketQuoteOrder("order-2", matchingo.Buy, fpdecimal.FromInt(100)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,11 +37,11 @@ func TestMarketQuantityQuoteProcessing(t *testing.T) {
 		t.Fatal("Wrong orders id")
 	}
 
-	if done.GetTradeOrder("order-1").Quantity.Equal(decimal.New(10, 0)) == false {
+	if done.GetTradeOrder("order-1").Quantity.Equal(fpdecimal.FromInt(10)) == false {
 		t.Fatal("Wrong orders quantity")
 	}
 
-	if done.Left.Equal(decimal.New(0, 0)) != true {
+	if done.Left.Equal(fpdecimal.FromInt(0)) != true {
 		t.Fatal("Wrong quote calculation")
 	}
 }
@@ -49,9 +49,9 @@ func TestMarketQuantityQuoteProcessing(t *testing.T) {
 func TestLimitFOKProcess(t *testing.T) {
 	ob := matchingo.NewOrderBook()
 
-	addDepth(ob, "", decimal.New(2, 0))
+	addDepth(ob, "", fpdecimal.FromInt(2))
 
-	done, err := ob.Process(matchingo.NewLimitOrder("order-b100", matchingo.Buy, decimal.New(11, 0), decimal.New(100, 0), matchingo.FOK, ""))
+	done, err := ob.Process(matchingo.NewLimitOrder("order-b100", matchingo.Buy, fpdecimal.FromInt(11), fpdecimal.FromInt(100), matchingo.FOK, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,15 +64,15 @@ func TestLimitFOKProcess(t *testing.T) {
 		t.Fatal("Wrong done canceled")
 	}
 
-	if !done.Left.Equal(decimal.Zero) {
+	if !done.Left.Equal(fpdecimal.Zero) {
 		t.Fatal("Wrong quantity left")
 	}
 
-	if !done.Processed.Equal(decimal.Zero) {
+	if !done.Processed.Equal(fpdecimal.Zero) {
 		t.Fatal("Wrong quantity processed")
 	}
 
-	done, err = ob.Process(matchingo.NewLimitOrder("order-s100", matchingo.Sell, decimal.New(11, 0), decimal.New(100, 0), matchingo.FOK, ""))
+	done, err = ob.Process(matchingo.NewLimitOrder("order-s100", matchingo.Sell, fpdecimal.FromInt(11), fpdecimal.FromInt(100), matchingo.FOK, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,20 +85,20 @@ func TestLimitFOKProcess(t *testing.T) {
 		t.Fatal("Wrong done canceled")
 	}
 
-	if !done.Left.Equal(decimal.Zero) {
+	if !done.Left.Equal(fpdecimal.Zero) {
 		t.Fatal("Wrong quantity left")
 	}
 
-	if !done.Processed.Equal(decimal.Zero) {
+	if !done.Processed.Equal(fpdecimal.Zero) {
 		t.Fatal("Wrong quantity processed")
 	}
 }
 
 func TestLimitIOCProcess(t *testing.T) {
 	ob := matchingo.NewOrderBook()
-	addDepth(ob, "", decimal.New(2, 0))
+	addDepth(ob, "", fpdecimal.FromInt(2))
 
-	done, err := ob.Process(matchingo.NewLimitOrder("order-ioc", matchingo.Buy, decimal.New(11, 0), decimal.New(200, 0), matchingo.IOC, ""))
+	done, err := ob.Process(matchingo.NewLimitOrder("order-ioc", matchingo.Buy, fpdecimal.FromInt(11), fpdecimal.FromInt(200), matchingo.IOC, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,11 +111,11 @@ func TestLimitIOCProcess(t *testing.T) {
 		t.Fatal("Wrong canceled")
 	}
 
-	if !done.Left.Equal(decimal.New(1, 0)) {
+	if !done.Left.Equal(fpdecimal.FromInt(1)) {
 		t.Fatal("Wrong quantity left")
 	}
 
-	if !done.Processed.Equal(decimal.New(10, 0)) {
+	if !done.Processed.Equal(fpdecimal.FromInt(10)) {
 		t.Fatal("Wrong quantity processed")
 	}
 
@@ -126,16 +126,16 @@ func TestLimitIOCProcess(t *testing.T) {
 
 func TestLimitPlace(t *testing.T) {
 	ob := matchingo.NewOrderBook()
-	quantity := decimal.New(2, 0)
+	quantity := fpdecimal.FromInt(2)
 	for i := 50; i < 100; i = i + 10 {
-		done, err := ob.Process(matchingo.NewLimitOrder(fmt.Sprintf("buy-%d", i), matchingo.Buy, quantity, decimal.New(int64(i), 0), "", ""))
+		done, err := ob.Process(matchingo.NewLimitOrder(fmt.Sprintf("buy-%d", i), matchingo.Buy, quantity, fpdecimal.FromInt(int64(i)), "", ""))
 		if len(done.Trades) != 0 {
 			t.Fatal("OrderBook failed to process limit order (participants is not empty)")
 		}
 		if done.Stored == false {
 			t.Fatal("OrderBook failed to process limit order (stores)")
 		}
-		if done.Left.Sign() != 0 {
+		if done.Left.Equal(fpdecimal.Zero) != true {
 			t.Fatal("OrderBook failed to process limit order (left)")
 		}
 		if err != nil {
@@ -144,14 +144,14 @@ func TestLimitPlace(t *testing.T) {
 	}
 
 	for i := 100; i < 150; i = i + 10 {
-		done, err := ob.Process(matchingo.NewLimitOrder(fmt.Sprintf("sell-%d", i), matchingo.Sell, quantity, decimal.New(int64(i), 0), "", ""))
+		done, err := ob.Process(matchingo.NewLimitOrder(fmt.Sprintf("sell-%d", i), matchingo.Sell, quantity, fpdecimal.FromInt(int64(i)), "", ""))
 		if len(done.Trades) != 0 {
 			t.Fatal("OrderBook failed to process limit order (participants is not empty)")
 		}
 		if done.Stored == false {
 			t.Fatal("OrderBook failed to process limit order (stores)")
 		}
-		if done.Left.Sign() != 0 {
+		if done.Left.Equal(fpdecimal.Zero) != true {
 			t.Fatal("OrderBook failed to process limit order (left)")
 		}
 		if err != nil {
@@ -162,9 +162,9 @@ func TestLimitPlace(t *testing.T) {
 
 func TestLimitProcess(t *testing.T) {
 	ob := matchingo.NewOrderBook()
-	addDepth(ob, "", decimal.New(2, 0))
+	addDepth(ob, "", fpdecimal.FromInt(2))
 
-	done, err := ob.Process(matchingo.NewLimitOrder("order-b100", matchingo.Buy, decimal.New(1, 0), decimal.New(100, 0), "", ""))
+	done, err := ob.Process(matchingo.NewLimitOrder("order-b100", matchingo.Buy, fpdecimal.FromInt(1), fpdecimal.FromInt(100), "", ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,15 +177,15 @@ func TestLimitProcess(t *testing.T) {
 		t.Fatal("Wrong stored")
 	}
 
-	if !done.Processed.Equal(decimal.New(1, 0)) {
+	if !done.Processed.Equal(fpdecimal.FromInt(1)) {
 		t.Fatal("Wrong quantity processed")
 	}
 
-	if !done.Left.Equal(decimal.Zero) {
+	if !done.Left.Equal(fpdecimal.Zero) {
 		t.Fatal("Wrong partial quantity left")
 	}
 
-	done, err = ob.Process(matchingo.NewLimitOrder("order-b150", matchingo.Buy, decimal.New(10, 0), decimal.New(150, 0), "", ""))
+	done, err = ob.Process(matchingo.NewLimitOrder("order-b150", matchingo.Buy, fpdecimal.FromInt(10), fpdecimal.FromInt(150), "", ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,15 +202,15 @@ func TestLimitProcess(t *testing.T) {
 		t.Fatal("Wrong order id")
 	}
 
-	if !done.Processed.Equal(decimal.New(9, 0)) {
+	if !done.Processed.Equal(fpdecimal.FromInt(9)) {
 		t.Fatal("Wrong partial quantity processed", done.Processed)
 	}
 
-	if _, err := ob.Process(matchingo.NewLimitOrder("buy-70", matchingo.Sell, decimal.New(11, 0), decimal.New(40, 0), "", "")); err == nil {
+	if _, err := ob.Process(matchingo.NewLimitOrder("buy-70", matchingo.Sell, fpdecimal.FromInt(11), fpdecimal.FromInt(40), "", "")); err == nil {
 		t.Fatal("Can add existing order")
 	}
 
-	done, err = ob.Process(matchingo.NewLimitOrder("order-s40", matchingo.Sell, decimal.New(11, 0), decimal.New(40, 0), "", ""))
+	done, err = ob.Process(matchingo.NewLimitOrder("order-s40", matchingo.Sell, fpdecimal.FromInt(11), fpdecimal.FromInt(40), "", ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +219,7 @@ func TestLimitProcess(t *testing.T) {
 		t.Fatal("Wrong participants count")
 	}
 
-	if done.Left.Sign() != 0 {
+	if done.Left.Equal(fpdecimal.Zero) != true {
 		t.Fatal("Wrong left")
 	}
 }
@@ -227,16 +227,16 @@ func TestLimitProcess(t *testing.T) {
 func TestOCOProcessStop(t *testing.T) {
 	ob := matchingo.NewOrderBook()
 
-	ob.Process(matchingo.NewLimitOrder("oco-1", matchingo.Buy, decimal.New(1, 0), decimal.New(100, 0), "", "oco-2"))
+	ob.Process(matchingo.NewLimitOrder("oco-1", matchingo.Buy, fpdecimal.FromInt(1), fpdecimal.FromInt(100), "", "oco-2"))
 	ob.Process(
-		matchingo.NewStopLimitOrder("oco-2", matchingo.Buy, decimal.New(1, 0), decimal.New(100, 0), decimal.New(101, 0), "oco-1"),
+		matchingo.NewStopLimitOrder("oco-2", matchingo.Buy, fpdecimal.FromInt(1), fpdecimal.FromInt(100), fpdecimal.FromInt(101), "oco-1"),
 	)
 
 	if ob.Stop.Len() != 1 {
 		t.Fatal("Wrong stop book")
 	}
 
-	done, err := ob.Process(matchingo.NewLimitOrder("simple-1", matchingo.Sell, decimal.New(1, 0), decimal.New(100, 0), "", ""))
+	done, err := ob.Process(matchingo.NewLimitOrder("simple-1", matchingo.Sell, fpdecimal.FromInt(1), fpdecimal.FromInt(100), "", ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,14 +258,14 @@ func TestOCOProcessLimit(t *testing.T) {
 	ob := matchingo.NewOrderBook()
 
 	ob.Process(
-		matchingo.NewStopLimitOrder("oco-2", matchingo.Buy, decimal.New(1, 0), decimal.New(150, 0), decimal.New(101, 0), "oco-1"),
+		matchingo.NewStopLimitOrder("oco-2", matchingo.Buy, fpdecimal.FromInt(1), fpdecimal.FromInt(150), fpdecimal.FromInt(101), "oco-1"),
 	)
-	ob.Process(matchingo.NewLimitOrder("o1", matchingo.Sell, decimal.New(1, 0), decimal.New(101, 0), "", ""))
-	ob.Process(matchingo.NewLimitOrder("o2", matchingo.Buy, decimal.New(1, 0), decimal.New(101, 0), "", ""))
+	ob.Process(matchingo.NewLimitOrder("o1", matchingo.Sell, fpdecimal.FromInt(1), fpdecimal.FromInt(101), "", ""))
+	ob.Process(matchingo.NewLimitOrder("o2", matchingo.Buy, fpdecimal.FromInt(1), fpdecimal.FromInt(101), "", ""))
 
-	ob.Process(matchingo.NewLimitOrder("oco-1", matchingo.Buy, decimal.New(1, 0), decimal.New(100, 0), "", "oco-2"))
+	ob.Process(matchingo.NewLimitOrder("oco-1", matchingo.Buy, fpdecimal.FromInt(1), fpdecimal.FromInt(100), "", "oco-2"))
 
-	done, err := ob.Process(matchingo.NewLimitOrder("simple-1", matchingo.Sell, decimal.New(1, 0), decimal.New(100, 0), "", ""))
+	done, err := ob.Process(matchingo.NewLimitOrder("simple-1", matchingo.Sell, fpdecimal.FromInt(1), fpdecimal.FromInt(100), "", ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,10 +293,10 @@ func TestOCOProcessLimit(t *testing.T) {
 
 func TestMarketProcess(t *testing.T) {
 	ob := matchingo.NewOrderBook()
-	addDepth(ob, "", decimal.New(2, 0))
+	addDepth(ob, "", fpdecimal.FromInt(2))
 
 	done, err := ob.Process(
-		matchingo.NewMarketQuoteOrder("order-buy-3", matchingo.Buy, decimal.New(300, 0)),
+		matchingo.NewMarketQuoteOrder("order-buy-3", matchingo.Buy, fpdecimal.FromInt(300)),
 	)
 
 	if err != nil {
@@ -307,11 +307,11 @@ func TestMarketProcess(t *testing.T) {
 		t.Fatal("Invalid participants length")
 	}
 
-	if !done.Left.Equal(decimal.Zero) {
+	if !done.Left.Equal(fpdecimal.Zero) {
 		t.Fatal("Wrong quantity left")
 	}
 
-	if !done.Processed.Equal(decimal.New(300, 0)) {
+	if !done.Processed.Equal(fpdecimal.FromInt(300)) {
 		t.Fatal("Wrong quantity processed")
 	}
 
@@ -319,7 +319,7 @@ func TestMarketProcess(t *testing.T) {
 		t.Fatal("order is not canceled")
 	}
 
-	done, err = ob.Process(matchingo.NewMarketOrder("order-sell-12", matchingo.Sell, decimal.New(12, 0)))
+	done, err = ob.Process(matchingo.NewMarketOrder("order-sell-12", matchingo.Sell, fpdecimal.FromInt(12)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,11 +328,11 @@ func TestMarketProcess(t *testing.T) {
 		t.Fatal("Invalid participants length")
 	}
 
-	if !done.Left.Equal(decimal.New(2, 0)) {
+	if !done.Left.Equal(fpdecimal.FromInt(2)) {
 		t.Fatal("Wrong quantity left")
 	}
 
-	if !done.Processed.Equal(decimal.New(10, 0)) {
+	if !done.Processed.Equal(fpdecimal.FromInt(10)) {
 		t.Fatal("Wrong quantity processed")
 	}
 
@@ -347,9 +347,9 @@ func TestStopOrderProcess(t *testing.T) {
 	stop := matchingo.NewStopLimitOrder(
 		"order-1",
 		matchingo.Buy,
-		decimal.New(10, 0),
-		decimal.New(10, 0),
-		decimal.New(10, 0),
+		fpdecimal.FromInt(10),
+		fpdecimal.FromInt(10),
+		fpdecimal.FromInt(10),
 
 		"",
 	)
@@ -360,8 +360,8 @@ func TestStopOrderProcess(t *testing.T) {
 		t.Fatal("stop book is broken")
 	}
 
-	ob.Process(matchingo.NewLimitOrder("order-limit-1", matchingo.Buy, decimal.New(10, 0), decimal.New(10, 0), "", ""))
-	ob.Process(matchingo.NewLimitOrder("order-limit-2", matchingo.Sell, decimal.New(10, 0), decimal.New(10, 0), "", ""))
+	ob.Process(matchingo.NewLimitOrder("order-limit-1", matchingo.Buy, fpdecimal.FromInt(10), fpdecimal.FromInt(10), "", ""))
+	ob.Process(matchingo.NewLimitOrder("order-limit-2", matchingo.Sell, fpdecimal.FromInt(10), fpdecimal.FromInt(10), "", ""))
 
 	if ob.Stop.Len() != 0 {
 		t.Fatal("stop book is broken")
@@ -370,52 +370,52 @@ func TestStopOrderProcess(t *testing.T) {
 
 func TestPriceCalculation(t *testing.T) {
 	ob := matchingo.NewOrderBook()
-	addDepth(ob, "05-", decimal.New(10, 0))
-	addDepth(ob, "10-", decimal.New(10, 0))
-	addDepth(ob, "15-", decimal.New(10, 0))
+	addDepth(ob, "05-", fpdecimal.FromInt(10))
+	addDepth(ob, "10-", fpdecimal.FromInt(10))
+	addDepth(ob, "15-", fpdecimal.FromInt(10))
 
-	price, err := ob.CalculateMarketPrice(matchingo.Buy, decimal.New(115, 0))
+	price, err := ob.CalculateMarketPrice(matchingo.Buy, fpdecimal.FromInt(115))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !price.Equal(decimal.New(13150, 0)) {
+	if !price.Equal(fpdecimal.FromInt(13150)) {
 		t.Fatal("invalid price", price)
 	}
 
-	price, err = ob.CalculateMarketPrice(matchingo.Buy, decimal.New(200, 0))
+	price, err = ob.CalculateMarketPrice(matchingo.Buy, fpdecimal.FromInt(200))
 	if err == nil {
 		t.Fatal("invalid quantity count")
 	}
 
-	if !price.Equal(decimal.New(18000, 0)) {
+	if !price.Equal(fpdecimal.FromInt(18000)) {
 		t.Fatal("invalid price", price)
 	}
 
 	// -------
 
-	price, err = ob.CalculateMarketPrice(matchingo.Sell, decimal.New(115, 0))
+	price, err = ob.CalculateMarketPrice(matchingo.Sell, fpdecimal.FromInt(115))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !price.Equal(decimal.New(8700, 0)) {
+	if !price.Equal(fpdecimal.FromInt(8700)) {
 		t.Fatal("invalid price", price)
 	}
 
-	price, err = ob.CalculateMarketPrice(matchingo.Sell, decimal.New(200, 0))
+	price, err = ob.CalculateMarketPrice(matchingo.Sell, fpdecimal.FromInt(200))
 	if err == nil {
 		t.Fatal("invalid quantity count")
 	}
 
-	if !price.Equal(decimal.New(10500, 0)) {
+	if !price.Equal(fpdecimal.FromInt(10500)) {
 		t.Fatal("invalid price", price)
 	}
 }
 
 var benchOb = matchingo.NewOrderBook()
-var BenchPrice = decimal.New(16, 0)
-var BenchQuantity = decimal.New(150, 0)
+var BenchPrice = fpdecimal.FromInt(16)
+var BenchQuantity = fpdecimal.FromInt(150)
 
 func BenchmarkAppendLimitOrders(b *testing.B) {
 	stopwatch := time.Now()
