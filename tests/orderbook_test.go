@@ -413,6 +413,44 @@ func TestPriceCalculation(t *testing.T) {
 	}
 }
 
+func TestPartialFillVolumeConservation(t *testing.T) {
+	ob := matchingo.NewOrderBook()
+
+	ob.Process(matchingo.NewLimitOrder("A", matchingo.Buy, fpdecimal.FromInt(10), fpdecimal.FromInt(100), "", ""))
+	ob.Process(matchingo.NewLimitOrder("B", matchingo.Buy, fpdecimal.FromInt(5), fpdecimal.FromInt(100), "", ""))
+
+	depth := ob.Depth()
+	if depth.Bid["100.000"] != "15.000" {
+		t.Fatalf("expected bid volume 15, got %s", depth.Bid["100.000"])
+	}
+
+	ob.Process(matchingo.NewLimitOrder("S", matchingo.Sell, fpdecimal.FromInt(3), fpdecimal.FromInt(100), "", ""))
+
+	depth = ob.Depth()
+	if depth.Bid["100.000"] != "12.000" {
+		t.Fatalf("expected bid volume 12 after partial fill, got %s", depth.Bid["100.000"])
+	}
+}
+
+func TestPartialFillVolumeConservationSingleOrder(t *testing.T) {
+	ob := matchingo.NewOrderBook()
+
+	ob.Process(matchingo.NewLimitOrder("X", matchingo.Buy, fpdecimal.FromInt(10), fpdecimal.FromInt(100), "", ""))
+	ob.Process(matchingo.NewLimitOrder("S1", matchingo.Sell, fpdecimal.FromInt(4), fpdecimal.FromInt(100), "", ""))
+
+	depth := ob.Depth()
+	if depth.Bid["100.000"] != "6.000" {
+		t.Fatalf("expected bid volume 6 after partial fill, got %s", depth.Bid["100.000"])
+	}
+
+	ob.Process(matchingo.NewLimitOrder("S2", matchingo.Sell, fpdecimal.FromInt(1), fpdecimal.FromInt(100), "", ""))
+
+	depth = ob.Depth()
+	if depth.Bid["100.000"] != "5.000" {
+		t.Fatalf("expected bid volume 5 after second partial fill, got %s", depth.Bid["100.000"])
+	}
+}
+
 var benchOb = matchingo.NewOrderBook()
 var BenchPrice = fpdecimal.FromInt(16)
 var BenchQuantity = fpdecimal.FromInt(150)

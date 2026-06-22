@@ -47,9 +47,9 @@ func (oq *OrderQueue) Append(o *Order) {
 	oq.Orders.PushBack(o)
 }
 
-// UpdateVolume updates volume
-func (oq *OrderQueue) UpdateVolume(o *Order) {
-	oq.volume = oq.volume.Sub(o.Quantity())
+// UpdateVolume subtracts consumed quantity from the price level volume.
+func (oq *OrderQueue) UpdateVolume(consumed fpdecimal.Decimal) {
+	oq.volume = oq.volume.Sub(consumed)
 }
 
 // Remove removes Order from the queue

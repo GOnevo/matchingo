@@ -165,12 +165,18 @@ func TestOrderQueueUpdate(t *testing.T) {
 	oq.Append(o2)
 
 	headOrder := oq.First()
-	headOrder.DecreaseQuantity(fpdecimal.FromInt(55))
+	consumed := fpdecimal.FromInt(55)
+	headOrder.DecreaseQuantity(consumed)
+	oq.UpdateVolume(consumed)
 
 	headOrder = oq.First()
 
 	if headOrder.Quantity().String() != "45.000" {
 		t.Fatalf("Invalid new price (have: %s, want: 45.000)", headOrder.Quantity().String())
+	}
+
+	if !oq.Volume().Equal(fpdecimal.FromInt(145)) {
+		t.Fatalf("Invalid order volume (have: %s, want: 145)", oq.Volume())
 	}
 }
 

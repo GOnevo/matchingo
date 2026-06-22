@@ -304,8 +304,8 @@ func (ob *OrderBook) processQueue(orderQueue *OrderQueue, quantity fpdecimal.Dec
 		orderQuantity := o.Quantity()
 		if quantity.LessThan(orderQuantity) {
 			done.appendOrder(o, quantity, price)
+			orderQueue.UpdateVolume(quantity)
 			o.DecreaseQuantity(quantity)
-			orderQueue.UpdateVolume(o)
 			quantity = fpdecimal.Zero
 		} else {
 			ob.appendToOCO(o, done)
