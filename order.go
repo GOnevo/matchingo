@@ -31,8 +31,8 @@ func (t *TradeOrder) MarshalJSON() ([]byte, error) {
 	return json.Marshal(customStruct)
 }
 
-func newTradeOrder(order *Order, quantity, price Decimal) *TradeOrder {
-	return &TradeOrder{
+func newTradeOrder(order *Order, quantity, price Decimal) TradeOrder {
+	return TradeOrder{
 		OrderID:  order.ID(),
 		Role:     order.Role(),
 		Price:    price,

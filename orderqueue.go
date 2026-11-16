@@ -16,7 +16,7 @@ func NewOrderQueue(price Decimal) *OrderQueue {
 	return &OrderQueue{
 		price:  price,
 		volume: Zero,
-		Orders: deque.New[*Order](),
+		Orders: deque.New[*Order](16),
 	}
 }
 

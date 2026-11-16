@@ -455,10 +455,19 @@ var benchOb = matchingo.NewOrderBook()
 var BenchPrice = matchingo.FromInt(16)
 var BenchQuantity = matchingo.FromInt(150)
 
+// benchIDs are pre-allocated order IDs to avoid string formatting overhead in benchmarks.
+var benchIDs = func() []string {
+	ids := make([]string, 1024)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("buy-%d", i)
+	}
+	return ids
+}()
+
 func BenchmarkAppendLimitOrders(b *testing.B) {
 	stopwatch := time.Now()
 	for i := 0; i < b.N; i++ {
-		benchOb.Process(matchingo.NewLimitOrder(fmt.Sprintf("buy-%d", i), matchingo.Buy, BenchQuantity, BenchPrice, "", ""))
+		benchOb.Process(matchingo.NewLimitOrder(benchIDs[i%len(benchIDs)], matchingo.Buy, BenchQuantity, BenchPrice, "", ""))
 	}
 	elapsed := time.Since(stopwatch)
 	fmt.Printf("Elapsed: %s\nTransactions per second (avg): %f\n", elapsed, float64(b.N*2)/elapsed.Seconds())
@@ -467,10 +476,10 @@ func BenchmarkAppendLimitOrders(b *testing.B) {
 func BenchmarkLimitOrders(b *testing.B) {
 	stopwatch := time.Now()
 	for i := 0; i < b.N; i++ {
-		benchOb.Process(matchingo.NewLimitOrder(fmt.Sprintf("sell-%d", i), matchingo.Sell, BenchQuantity, BenchPrice, "", ""))
+		benchOb.Process(matchingo.NewLimitOrder(benchIDs[i%len(benchIDs)], matchingo.Sell, BenchQuantity, BenchPrice, "", ""))
 	}
 	for i := 0; i < b.N; i++ {
-		benchOb.Process(matchingo.NewLimitOrder(fmt.Sprintf("buy-%d", i), matchingo.Buy, BenchQuantity, BenchPrice, "", ""))
+		benchOb.Process(matchingo.NewLimitOrder(benchIDs[i%len(benchIDs)], matchingo.Buy, BenchQuantity, BenchPrice, "", ""))
 	}
 	elapsed := time.Since(stopwatch)
 	fmt.Printf("Elapsed: %s\nTransactions per second (avg): %f\n", elapsed, float64(b.N*2)/elapsed.Seconds())

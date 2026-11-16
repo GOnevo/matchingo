@@ -7,7 +7,7 @@ import (
 // Done structure
 type Done struct {
 	Order     *Order
-	Trades    []*TradeOrder
+	Trades    []TradeOrder
 	Canceled  []string
 	Activated []string
 	Stored    bool
@@ -41,9 +41,9 @@ func newDone(order *Order) *Done {
 
 // GetTradeOrder returns TradeOrder by id
 func (d *Done) GetTradeOrder(id string) *TradeOrder {
-	for _, t := range d.Trades {
-		if t.OrderID == id {
-			return t
+	for i := range d.Trades {
+		if d.Trades[i].OrderID == id {
+			return &d.Trades[i]
 		}
 	}
 	return nil
@@ -52,6 +52,7 @@ func (d *Done) GetTradeOrder(id string) *TradeOrder {
 func (d *Done) appendOrder(order *Order, quantity, price Decimal) {
 
 	if len(d.Trades) == 0 {
+		d.Trades = make([]TradeOrder, 0, 2)
 		d.Trades = append(d.Trades, newTradeOrder(d.Order, Zero, d.Order.Price()))
 	}
 
@@ -59,11 +60,7 @@ func (d *Done) appendOrder(order *Order, quantity, price Decimal) {
 }
 
 func (d *Done) tradesToSlice() []TradeOrder {
-	slice := make([]TradeOrder, 0, len(d.Trades))
-	for _, v := range d.Trades {
-		slice = append(slice, *v)
-	}
-	return slice
+	return d.Trades
 }
 
 func (d *Done) appendCanceled(order *Order) {
