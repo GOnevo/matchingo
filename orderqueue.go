@@ -13,10 +13,12 @@ type OrderQueue struct {
 
 // NewOrderQueue creates and initialize OrderQueue object
 func NewOrderQueue(price Decimal) *OrderQueue {
+	orders := &deque.Deque[*Order]{}
+	orders.SetBaseCap(16)
 	return &OrderQueue{
 		price:  price,
 		volume: Zero,
-		Orders: deque.New[*Order](16),
+		Orders: orders,
 	}
 }
 

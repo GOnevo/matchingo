@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hashicorp/go-set"
+	"github.com/hashicorp/go-set/v3"
 )
 
 // OrderSide implements facade to operations with Order queue
 type OrderSide struct {
-	orderedPrices *set.TreeSet[Decimal, set.Compare[Decimal]]
+	orderedPrices *set.TreeSet[Decimal]
 	prices        map[Decimal]*OrderQueue
 	len           int
 	depth         int
@@ -18,7 +18,7 @@ type OrderSide struct {
 // NewOrderSideAsk creates new OrderSide manager
 func NewOrderSideAsk() *OrderSide {
 	return &OrderSide{
-		orderedPrices: set.NewTreeSet[Decimal, set.Compare[Decimal]](func(a Decimal, b Decimal) int {
+		orderedPrices: set.NewTreeSet[Decimal](func(a Decimal, b Decimal) int {
 			return a.Compare(b)
 		}),
 		prices: map[Decimal]*OrderQueue{},
@@ -28,7 +28,7 @@ func NewOrderSideAsk() *OrderSide {
 // NewOrderSideBid creates new OrderSide manager
 func NewOrderSideBid() *OrderSide {
 	return &OrderSide{
-		orderedPrices: set.NewTreeSet[Decimal, set.Compare[Decimal]](func(a Decimal, b Decimal) int {
+		orderedPrices: set.NewTreeSet[Decimal](func(a Decimal, b Decimal) int {
 			return b.Compare(a)
 		}),
 		prices: map[Decimal]*OrderQueue{},

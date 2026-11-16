@@ -1,6 +1,8 @@
 package matchingo
 
 import (
+	"fmt"
+
 	"github.com/nikolaydubina/fpdecimal"
 )
 
@@ -72,9 +74,31 @@ func (d Decimal) Div(other Decimal) Decimal {
 	return Decimal{d.Decimal.Div(other.Decimal)}
 }
 
-// String returns the string representation of d
+// String returns the string representation of d with trailing zeros.
 func (d Decimal) String() string {
-	return d.Decimal.String()
+	v := d.Decimal.Scaled()
+	if v == 0 {
+		return fmt.Sprintf("0.%0*d", int(fpdecimal.FractionDigits), 0)
+	}
+
+	neg := v < 0
+	if neg {
+		v = -v
+	}
+
+	frac := int64(1)
+	for i := uint8(0); i < fpdecimal.FractionDigits; i++ {
+		frac *= 10
+	}
+
+	whole := v / frac
+	fracPart := v % frac
+
+	s := fmt.Sprintf("%d.%0*d", whole, int(fpdecimal.FractionDigits), fracPart)
+	if neg {
+		s = "-" + s
+	}
+	return s
 }
 
 // Compare compares d with other and returns -1, 0, or 1
