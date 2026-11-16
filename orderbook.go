@@ -279,10 +279,11 @@ func (ob *OrderBook) appendLimitOrder(order *Order) {
 func (ob *OrderBook) activateStopOrders(price fpdecimal.Decimal) []*Order {
 	var activated []*Order
 	orders := ob.Stop.Activate(price)
-	for _, order := range orders {
+	for i := range orders {
+		order := &orders[i]
 		order.ActivateStopOrder()
-		ob.appendLimitOrder(&order)
-		activated = append(activated, &order)
+		ob.appendLimitOrder(order)
+		activated = append(activated, order)
 	}
 
 	return activated
