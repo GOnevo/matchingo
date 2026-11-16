@@ -57,6 +57,9 @@ func (sb *StopBook) Activate(price fpdecimal.Decimal) []Order {
 	}
 
 	slice := priceQueue.Slice()
+	for _, order := range slice {
+		delete(sb.orders, order.ID())
+	}
 
 	if priceQueue.Len() == 0 {
 		delete(sb.prices, strPrice)
@@ -77,6 +80,7 @@ func (sb *StopBook) Remove(order *Order) *Order {
 		delete(sb.prices, price)
 	}
 
+	delete(sb.orders, order.ID())
 	sb.numOrders--
 	return order
 }
