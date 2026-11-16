@@ -57,6 +57,28 @@ func (ob *OrderBook) CancelOrder(orderID string) *Order {
 
 // Process public method
 func (ob *OrderBook) Process(order *Order) (done *Done, err error) {
+	if order == nil || (!order.IsMarketOrder() && !order.IsLimitOrder() && !order.IsStopOrder()) {
+		return nil, ErrInvalidOrder
+	}
+	if order.Side() != Buy && order.Side() != Sell {
+		return nil, ErrInvalidSide
+	}
+	if order.IsCanceled() {
+		return nil, ErrCanceledOrder
+	}
+	if order.Quantity().LessThanOrEqual(fpdecimal.Zero) {
+		return nil, ErrInvalidQuantity
+	}
+	if !order.IsMarketOrder() && order.Price().LessThanOrEqual(fpdecimal.Zero) {
+		return nil, ErrInvalidPrice
+	}
+	if order.IsStopOrder() && order.StopPrice().LessThanOrEqual(fpdecimal.Zero) {
+		return nil, ErrInvalidPrice
+	}
+	if ob.GetOrder(order.ID()) != nil {
+		return nil, ErrOrderExists
+	}
+
 	if order.IsMarketOrder() {
 		return ob.processMarketOrder(order)
 	}
@@ -165,7 +187,11 @@ func (ob *OrderBook) processMarketOrder(marketOrder *Order) (done *Done, err err
 	for quantity.GreaterThan(fpdecimal.Zero) && side.Len() > 0 {
 		bestPrice := iter()
 		if marketOrder.IsQuote() {
-			quantity = ob.processQueueQuote(bestPrice, quantity, done)
+			remaining := ob.processQueueQuote(bestPrice, quantity, done)
+			if remaining.Equal(quantity) {
+				break // The budget cannot buy one more base unit at the best price.
+			}
+			quantity = remaining
 		} else {
 			quantity = ob.processQueue(bestPrice, quantity, done)
 		}
@@ -185,11 +211,6 @@ func (ob *OrderBook) processMarketOrder(marketOrder *Order) (done *Done, err err
 func (ob *OrderBook) processLimitOrder(limitOrder *Order) (done *Done, err error) {
 
 	quantity := limitOrder.Quantity()
-
-	order := ob.GetOrder(limitOrder.ID())
-	if order != nil {
-		return nil, ErrOrderExists
-	}
 
 	var (
 		side       *OrderSide
@@ -290,9 +311,10 @@ func (ob *OrderBook) activateStopOrders(price fpdecimal.Decimal) []*Order {
 }
 
 func (ob *OrderBook) processQueueQuote(bestPrice *OrderQueue, quantity fpdecimal.Decimal, done *Done) fpdecimal.Decimal {
-	return ob.adaptQuantityQuote(
-		ob.processQueue(bestPrice, ob.adaptQuantityBase(quantity, bestPrice.Price()), done), bestPrice.Price(),
-	)
+	baseQuantity := ob.adaptQuantityBase(quantity, bestPrice.Price())
+	remaining := ob.processQueue(bestPrice, baseQuantity, done)
+	spent := ob.adaptQuantityQuote(baseQuantity.Sub(remaining), bestPrice.Price())
+	return quantity.Sub(spent)
 }
 
 func (ob *OrderBook) processQueue(orderQueue *OrderQueue, quantity fpdecimal.Decimal, done *Done) fpdecimal.Decimal {

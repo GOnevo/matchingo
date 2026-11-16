@@ -307,15 +307,16 @@ func TestMarketProcess(t *testing.T) {
 		t.Fatal("Invalid participants length")
 	}
 
-	if !done.Left.Equal(fpdecimal.Zero) {
+	// 200 at price 100 plus 0.909 base units at price 110 costs 299.990.
+	if !done.Left.Equal(fpdecimal.FromIntScaled(10)) {
 		t.Fatal("Wrong quantity left")
 	}
 
-	if !done.Processed.Equal(fpdecimal.FromInt(300)) {
+	if !done.Processed.Equal(fpdecimal.FromIntScaled(299990)) {
 		t.Fatal("Wrong quantity processed")
 	}
 
-	if done.Order.IsCanceled() {
+	if !done.Order.IsCanceled() {
 		t.Fatal("order is not canceled")
 	}
 

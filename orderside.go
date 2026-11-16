@@ -64,12 +64,17 @@ func (os *OrderSide) Append(o *Order) {
 	os.len++
 }
 
-// Remove removes Order from definite Price level
+// Remove removes Order from definite Price level, returning nil if it is absent.
 func (os *OrderSide) Remove(order *Order) *Order {
+	if order == nil {
+		return nil
+	}
 	price := order.Price()
 
 	priceQueue := os.prices[price]
-	priceQueue.Remove(order)
+	if priceQueue == nil || !priceQueue.Remove(order) {
+		return nil
+	}
 
 	if priceQueue.Len() == 0 {
 		delete(os.prices, price)
