@@ -35,7 +35,7 @@ func newDone(order *Order) *Done {
 		Trades:    make([]*TradeOrder, 0),
 		Canceled:  make([]string, 0),
 		Activated: make([]string, 0),
-		Quantity:  order.OriginalQty(),
+		Quantity:  order.Quantity(),
 		Left:      fpdecimal.Zero,
 		Processed: fpdecimal.Zero,
 	}
