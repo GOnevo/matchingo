@@ -1,17 +1,20 @@
-test: imports fix
-	go test ./tests
+.DEFAULT_GOAL: help
+.PHONY: help imports fix test test-v bench demo
 
-test-v:
-	go test ./tests -v
+help: ## Show this help message
+	@sed -rn 's/^([a-zA-Z_-]+):.*## (.*)$$/"\1" "\2"/p' < $(MAKEFILE_LIST) | xargs printf "make %-20s# %s\n"
 
-demo:
-	go run example/main.go
-
-bench:
-	go test -bench="BenchmarkLimitOrders" -benchmem ./tests
-
-imports:
+imports: ## Run goimports to tidy imports
 	goimports -w .
-
-fix:
+fix: ## Run gofmt to fix formatting
 	gofmt -s -w .
+
+test: imports fix ## Run tests
+	go test ./tests/...
+test-v: imports fix ## Run tests with verbose output
+	go test ./tests/... -v
+bench: ## Run benchmarks
+	go test -bench="BenchmarkLimitOrders" -benchmem ./tests/...
+
+demo: ## Run the example
+	go run example/main.go

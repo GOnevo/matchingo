@@ -1,4 +1,4 @@
-package tests
+package orderside
 
 import (
 	"fmt"
@@ -6,17 +6,16 @@ import (
 	"time"
 
 	"github.com/gonevo/matchingo"
-	"github.com/nikolaydubina/fpdecimal"
 )
 
-func TestOrderSideBid(t *testing.T) {
+func TestOrderSide_Bid(t *testing.T) {
 	orderSide := matchingo.NewOrderSideBid()
 
 	o1 := matchingo.NewLimitOrder(
 		"order-1",
 		matchingo.Buy,
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(10),
+		matchingo.FromInt(10),
+		matchingo.FromInt(10),
 		"",
 		"",
 	)
@@ -24,8 +23,8 @@ func TestOrderSideBid(t *testing.T) {
 	o2 := matchingo.NewLimitOrder(
 		"order-2",
 		matchingo.Buy,
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(20),
+		matchingo.FromInt(10),
+		matchingo.FromInt(20),
 		"",
 		"",
 	)
@@ -70,14 +69,14 @@ func TestOrderSideBid(t *testing.T) {
 	}
 }
 
-func TestOrderSideAsk(t *testing.T) {
+func TestOrderSide_Ask(t *testing.T) {
 	orderSide := matchingo.NewOrderSideAsk()
 
 	o1 := matchingo.NewLimitOrder(
 		"order-1",
 		matchingo.Sell,
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(10),
+		matchingo.FromInt(10),
+		matchingo.FromInt(10),
 		"",
 		"",
 	)
@@ -85,8 +84,8 @@ func TestOrderSideAsk(t *testing.T) {
 	o2 := matchingo.NewLimitOrder(
 		"order-2",
 		matchingo.Sell,
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(20),
+		matchingo.FromInt(10),
+		matchingo.FromInt(20),
 		"",
 		"",
 	)
@@ -137,8 +136,8 @@ func TestOrderSide_CanBuyOrderBeFilled(t *testing.T) {
 	o1 := matchingo.NewLimitOrder(
 		"order-1",
 		matchingo.Sell,
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(10),
+		matchingo.FromInt(10),
+		matchingo.FromInt(10),
 		"",
 		"",
 	)
@@ -146,8 +145,8 @@ func TestOrderSide_CanBuyOrderBeFilled(t *testing.T) {
 	o2 := matchingo.NewLimitOrder(
 		"order-2",
 		matchingo.Sell,
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(20),
+		matchingo.FromInt(10),
+		matchingo.FromInt(20),
 		"",
 		"",
 	)
@@ -155,8 +154,8 @@ func TestOrderSide_CanBuyOrderBeFilled(t *testing.T) {
 	o3 := matchingo.NewLimitOrder(
 		"order-3",
 		matchingo.Sell,
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(30),
+		matchingo.FromInt(10),
+		matchingo.FromInt(30),
 		"",
 		"",
 	)
@@ -180,8 +179,8 @@ func TestOrderSide_CanBuyOrderBeFilled(t *testing.T) {
 	o4 := matchingo.NewLimitOrder(
 		"order-4",
 		matchingo.Buy,
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(30),
+		matchingo.FromInt(10),
+		matchingo.FromInt(30),
 		"",
 		"",
 	)
@@ -193,8 +192,8 @@ func TestOrderSide_CanBuyOrderBeFilled(t *testing.T) {
 	o5 := matchingo.NewLimitOrder(
 		"order-5",
 		matchingo.Buy,
-		fpdecimal.FromInt(20),
-		fpdecimal.FromInt(20),
+		matchingo.FromInt(20),
+		matchingo.FromInt(20),
 		"",
 		"",
 	)
@@ -206,8 +205,8 @@ func TestOrderSide_CanBuyOrderBeFilled(t *testing.T) {
 	o7 := matchingo.NewLimitOrder(
 		"order-7",
 		matchingo.Buy,
-		fpdecimal.FromInt(31),
-		fpdecimal.FromInt(100),
+		matchingo.FromInt(31),
+		matchingo.FromInt(100),
 		"",
 		"",
 	)
@@ -223,8 +222,8 @@ func TestOrderSide_CanSellOrderBeFilled(t *testing.T) {
 	o1 := matchingo.NewLimitOrder(
 		"order-1",
 		matchingo.Buy,
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(10),
+		matchingo.FromInt(10),
+		matchingo.FromInt(10),
 		"",
 		"",
 	)
@@ -232,8 +231,8 @@ func TestOrderSide_CanSellOrderBeFilled(t *testing.T) {
 	o2 := matchingo.NewLimitOrder(
 		"order-2",
 		matchingo.Buy,
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(20),
+		matchingo.FromInt(10),
+		matchingo.FromInt(20),
 		"",
 		"",
 	)
@@ -241,8 +240,8 @@ func TestOrderSide_CanSellOrderBeFilled(t *testing.T) {
 	o3 := matchingo.NewLimitOrder(
 		"order-3",
 		matchingo.Buy,
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(30),
+		matchingo.FromInt(10),
+		matchingo.FromInt(30),
 		"",
 		"",
 	)
@@ -266,8 +265,8 @@ func TestOrderSide_CanSellOrderBeFilled(t *testing.T) {
 	o4 := matchingo.NewLimitOrder(
 		"order-4",
 		matchingo.Sell,
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(30),
+		matchingo.FromInt(10),
+		matchingo.FromInt(30),
 		"",
 		"",
 	)
@@ -279,8 +278,8 @@ func TestOrderSide_CanSellOrderBeFilled(t *testing.T) {
 	o5 := matchingo.NewLimitOrder(
 		"order-5",
 		matchingo.Sell,
-		fpdecimal.FromInt(20),
-		fpdecimal.FromInt(20),
+		matchingo.FromInt(20),
+		matchingo.FromInt(20),
 		"",
 		"",
 	)
@@ -292,8 +291,8 @@ func TestOrderSide_CanSellOrderBeFilled(t *testing.T) {
 	o6 := matchingo.NewLimitOrder(
 		"order-6",
 		matchingo.Sell,
-		fpdecimal.FromInt(21),
-		fpdecimal.FromInt(20),
+		matchingo.FromInt(21),
+		matchingo.FromInt(20),
 		"",
 		"",
 	)
@@ -305,8 +304,8 @@ func TestOrderSide_CanSellOrderBeFilled(t *testing.T) {
 	o7 := matchingo.NewLimitOrder(
 		"order-7",
 		matchingo.Buy,
-		fpdecimal.FromInt(31),
-		fpdecimal.FromInt(100),
+		matchingo.FromInt(31),
+		matchingo.FromInt(100),
 		"",
 		"",
 	)
@@ -315,6 +314,9 @@ func TestOrderSide_CanSellOrderBeFilled(t *testing.T) {
 		t.Fatal("invalid CanBuyOrderBeFilled result")
 	}
 }
+
+var BenchPrice = matchingo.FromInt(16)
+var BenchQuantity = matchingo.FromInt(150)
 
 var BenchOrderSideBid = matchingo.NewOrderSideBid()
 

@@ -1,13 +1,12 @@
-package tests
+package orderbook
 
 import (
 	"testing"
 
 	"github.com/gonevo/matchingo"
-	"github.com/nikolaydubina/fpdecimal"
 )
 
-func TestActivatedStopOrdersKeepDistinctIdentities(t *testing.T) {
+func TestOrderBook_ActivatedStopOrdersKeepIdentities(t *testing.T) {
 	for _, side := range []matchingo.Side{matchingo.Buy, matchingo.Sell} {
 		t.Run(side.String(), func(t *testing.T) {
 			book := matchingo.NewOrderBook()
@@ -18,16 +17,16 @@ func TestActivatedStopOrdersKeepDistinctIdentities(t *testing.T) {
 				opposite = matchingo.Buy
 			}
 			orders := []*matchingo.Order{
-				matchingo.NewStopLimitOrder("first", side, fpdecimal.FromInt(2), fpdecimal.FromInt(firstPrice), fpdecimal.FromInt(10), ""),
-				matchingo.NewStopLimitOrder("second", side, fpdecimal.FromInt(3), fpdecimal.FromInt(secondPrice), fpdecimal.FromInt(10), ""),
-				matchingo.NewLimitOrder("trigger-maker", opposite, fpdecimal.FromInt(1), fpdecimal.FromInt(10), matchingo.GTC, ""),
+				matchingo.NewStopLimitOrder("first", side, matchingo.FromInt(2), matchingo.FromInt(int(firstPrice)), matchingo.FromInt(10), ""),
+				matchingo.NewStopLimitOrder("second", side, matchingo.FromInt(3), matchingo.FromInt(int(secondPrice)), matchingo.FromInt(10), ""),
+				matchingo.NewLimitOrder("trigger-maker", opposite, matchingo.FromInt(1), matchingo.FromInt(10), matchingo.GTC, ""),
 			}
 			for _, order := range orders {
 				if _, err := book.Process(order); err != nil {
 					t.Fatal(err)
 				}
 			}
-			done, err := book.Process(matchingo.NewMarketOrder("trigger-taker", side, fpdecimal.FromInt(1)))
+			done, err := book.Process(matchingo.NewMarketOrder("trigger-taker", side, matchingo.FromInt(1)))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -46,12 +45,12 @@ func TestActivatedStopOrdersKeepDistinctIdentities(t *testing.T) {
 			if book.CancelOrder("first") != first || book.GetOrder("second") != second || second.IsCanceled() {
 				t.Fatal("canceling the first order affected the second")
 			}
-			done, err = book.Process(matchingo.NewMarketOrder("fill-second", opposite, fpdecimal.FromInt(3)))
+			done, err = book.Process(matchingo.NewMarketOrder("fill-second", opposite, matchingo.FromInt(3)))
 			if err != nil {
 				t.Fatal(err)
 			}
 			trade := done.GetTradeOrder("second")
-			if trade == nil || !trade.Quantity.Equal(fpdecimal.FromInt(3)) || !trade.Price.Equal(fpdecimal.FromInt(secondPrice)) || book.GetOrder("second") != nil {
+			if trade == nil || !trade.Quantity.Equal(matchingo.FromInt(3)) || !trade.Price.Equal(matchingo.FromInt(int(secondPrice))) || book.GetOrder("second") != nil {
 				t.Fatal("the second order could not be filled independently")
 			}
 		})

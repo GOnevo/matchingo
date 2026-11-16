@@ -1,31 +1,30 @@
-package tests
+package stopbook
 
 import (
 	"testing"
 
 	"github.com/gonevo/matchingo"
-	"github.com/nikolaydubina/fpdecimal"
 )
 
-func TestStopBookReleasesIDsAfterRemovalAndActivation(t *testing.T) {
+func TestStopBook_ReleasesIDsAfterRemovalAndActivation(t *testing.T) {
 	for _, operation := range []string{"remove", "activate"} {
 		t.Run(operation, func(t *testing.T) {
 			book := matchingo.NewStopBook()
-			original := matchingo.NewStopLimitOrder("stop", matchingo.Buy, fpdecimal.FromInt(2), fpdecimal.FromInt(9), fpdecimal.FromInt(10), "")
+			original := matchingo.NewStopLimitOrder("stop", matchingo.Buy, matchingo.FromInt(2), matchingo.FromInt(9), matchingo.FromInt(10), "")
 			book.Append(original)
 
 			if operation == "remove" {
 				if book.Remove(original) != original {
 					t.Fatal("Remove did not return the original order")
 				}
-			} else if orders := book.Activate(fpdecimal.FromInt(10)); len(orders) != 1 || orders[0].ID() != original.ID() {
+			} else if orders := book.Activate(matchingo.FromInt(10)); len(orders) != 1 || orders[0].ID() != original.ID() {
 				t.Fatalf("unexpected activated orders: %v", orders)
 			}
 			if book.Len() != 0 {
 				t.Fatalf("remaining stop count = %d, want 0", book.Len())
 			}
 
-			replacement := matchingo.NewStopLimitOrder("stop", matchingo.Buy, fpdecimal.FromInt(3), fpdecimal.FromInt(8), fpdecimal.FromInt(11), "")
+			replacement := matchingo.NewStopLimitOrder("stop", matchingo.Buy, matchingo.FromInt(3), matchingo.FromInt(8), matchingo.FromInt(11), "")
 			book.Append(replacement)
 			if book.Len() != 1 {
 				t.Fatalf("replacement was not stored: count = %d", book.Len())
@@ -40,16 +39,16 @@ func TestStopBookReleasesIDsAfterRemovalAndActivation(t *testing.T) {
 	}
 }
 
-func TestStopBookCannotRemoveReleasedIDTwice(t *testing.T) {
+func TestStopBook_CannotRemoveReleasedIDTwice(t *testing.T) {
 	for _, operation := range []string{"remove", "activate"} {
 		t.Run(operation, func(t *testing.T) {
 			book := matchingo.NewStopBook()
-			order := matchingo.NewStopLimitOrder("stop", matchingo.Sell, fpdecimal.FromInt(2), fpdecimal.FromInt(12), fpdecimal.FromInt(11), "")
+			order := matchingo.NewStopLimitOrder("stop", matchingo.Sell, matchingo.FromInt(2), matchingo.FromInt(12), matchingo.FromInt(11), "")
 			book.Append(order)
 			if operation == "remove" {
 				book.Remove(order)
 			} else {
-				book.Activate(fpdecimal.FromInt(11))
+				book.Activate(matchingo.FromInt(11))
 			}
 			if removed := book.RemoveByID("stop"); removed != nil {
 				t.Fatalf("removed a stale order: %v", removed)
@@ -61,16 +60,16 @@ func TestStopBookCannotRemoveReleasedIDTwice(t *testing.T) {
 	}
 }
 
-func TestCancelAndResubmitStopOrder(t *testing.T) {
+func TestStopBook_CancelAndResubmit(t *testing.T) {
 	book := matchingo.NewOrderBook()
-	original := matchingo.NewStopLimitOrder("stop", matchingo.Buy, fpdecimal.FromInt(2), fpdecimal.FromInt(9), fpdecimal.FromInt(10), "")
+	original := matchingo.NewStopLimitOrder("stop", matchingo.Buy, matchingo.FromInt(2), matchingo.FromInt(9), matchingo.FromInt(10), "")
 	if _, err := book.Process(original); err != nil {
 		t.Fatal(err)
 	}
 	if book.CancelOrder("stop") != original {
 		t.Fatal("original stop was not canceled")
 	}
-	replacement := matchingo.NewStopLimitOrder("stop", matchingo.Buy, fpdecimal.FromInt(3), fpdecimal.FromInt(8), fpdecimal.FromInt(11), "")
+	replacement := matchingo.NewStopLimitOrder("stop", matchingo.Buy, matchingo.FromInt(3), matchingo.FromInt(8), matchingo.FromInt(11), "")
 	if _, err := book.Process(replacement); err != nil {
 		t.Fatal(err)
 	}

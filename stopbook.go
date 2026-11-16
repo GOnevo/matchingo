@@ -3,8 +3,6 @@ package matchingo
 import (
 	"fmt"
 	"strings"
-
-	"github.com/nikolaydubina/fpdecimal"
 )
 
 // StopBook implements facade to operations with Stop Orders
@@ -48,7 +46,7 @@ func (sb *StopBook) Append(o *Order) {
 }
 
 // Activate Orders by Stop Price
-func (sb *StopBook) Activate(price fpdecimal.Decimal) []Order {
+func (sb *StopBook) Activate(price Decimal) []Order {
 	strPrice := price.String()
 
 	priceQueue, ok := sb.prices[strPrice]

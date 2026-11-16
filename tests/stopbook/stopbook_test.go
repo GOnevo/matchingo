@@ -1,10 +1,9 @@
-package tests
+package stopbook
 
 import (
 	"testing"
 
 	"github.com/gonevo/matchingo"
-	"github.com/nikolaydubina/fpdecimal"
 )
 
 func TestStopBook_Activate(t *testing.T) {
@@ -13,18 +12,18 @@ func TestStopBook_Activate(t *testing.T) {
 	o1 := matchingo.NewStopLimitOrder(
 		"order-1",
 		matchingo.Buy,
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(10),
+		matchingo.FromInt(10),
+		matchingo.FromInt(10),
+		matchingo.FromInt(10),
 		"",
 	)
 
 	o2 := matchingo.NewStopLimitOrder(
 		"order-2",
 		matchingo.Buy,
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(20),
-		fpdecimal.FromInt(20),
+		matchingo.FromInt(10),
+		matchingo.FromInt(20),
+		matchingo.FromInt(20),
 		"",
 	)
 
@@ -35,7 +34,7 @@ func TestStopBook_Activate(t *testing.T) {
 		t.Fatal("invalid orders count")
 	}
 
-	slice := stopBook.Activate(fpdecimal.FromInt(10))
+	slice := stopBook.Activate(matchingo.FromInt(10))
 
 	if len(slice) != 1 {
 		t.Fatal("invalid slice count")
@@ -48,15 +47,15 @@ func TestStopBook_Activate(t *testing.T) {
 	o3 := matchingo.NewStopLimitOrder(
 		"order-3",
 		matchingo.Buy,
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(20),
-		fpdecimal.FromInt(20),
+		matchingo.FromInt(10),
+		matchingo.FromInt(20),
+		matchingo.FromInt(20),
 		"",
 	)
 
 	stopBook.Append(o3)
 
-	slice = stopBook.Activate(fpdecimal.FromInt(20))
+	slice = stopBook.Activate(matchingo.FromInt(20))
 
 	if len(slice) != 2 {
 		t.Fatal("invalid slice count")
@@ -73,18 +72,18 @@ func TestStopBook_Remove(t *testing.T) {
 	o1 := matchingo.NewStopLimitOrder(
 		"order-1",
 		matchingo.Buy,
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(10),
+		matchingo.FromInt(10),
+		matchingo.FromInt(10),
+		matchingo.FromInt(10),
 		"",
 	)
 
 	o2 := matchingo.NewStopLimitOrder(
 		"order-2",
 		matchingo.Buy,
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(20),
-		fpdecimal.FromInt(20),
+		matchingo.FromInt(10),
+		matchingo.FromInt(20),
+		matchingo.FromInt(20),
 		"",
 	)
 
@@ -109,18 +108,18 @@ func TestStopBook_RemoveByID(t *testing.T) {
 	o1 := matchingo.NewStopLimitOrder(
 		"order-1",
 		matchingo.Buy,
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(10),
+		matchingo.FromInt(10),
+		matchingo.FromInt(10),
+		matchingo.FromInt(10),
 		"",
 	)
 
 	o2 := matchingo.NewStopLimitOrder(
 		"order-2",
 		matchingo.Buy,
-		fpdecimal.FromInt(10),
-		fpdecimal.FromInt(20),
-		fpdecimal.FromInt(20),
+		matchingo.FromInt(10),
+		matchingo.FromInt(20),
+		matchingo.FromInt(20),
 		"",
 	)
 

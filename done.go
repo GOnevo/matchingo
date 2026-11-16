@@ -2,8 +2,6 @@ package matchingo
 
 import (
 	"encoding/json"
-
-	"github.com/nikolaydubina/fpdecimal"
 )
 
 // Done structure
@@ -13,9 +11,9 @@ type Done struct {
 	Canceled  []string
 	Activated []string
 	Stored    bool
-	Quantity  fpdecimal.Decimal
-	Left      fpdecimal.Decimal
-	Processed fpdecimal.Decimal
+	Quantity  Decimal
+	Left      Decimal
+	Processed Decimal
 }
 
 // DoneJSON structure
@@ -32,12 +30,12 @@ type DoneJSON struct {
 func newDone(order *Order) *Done {
 	return &Done{
 		Order:     order,
-		Trades:    make([]*TradeOrder, 0),
-		Canceled:  make([]string, 0),
-		Activated: make([]string, 0),
+		Trades:    nil,
+		Canceled:  nil,
+		Activated: nil,
 		Quantity:  order.Quantity(),
-		Left:      fpdecimal.Zero,
-		Processed: fpdecimal.Zero,
+		Left:      Zero,
+		Processed: Zero,
 	}
 }
 
@@ -51,10 +49,10 @@ func (d *Done) GetTradeOrder(id string) *TradeOrder {
 	return nil
 }
 
-func (d *Done) appendOrder(order *Order, quantity, price fpdecimal.Decimal) {
+func (d *Done) appendOrder(order *Order, quantity, price Decimal) {
 
 	if len(d.Trades) == 0 {
-		d.Trades = append(d.Trades, newTradeOrder(d.Order, fpdecimal.Zero, d.Order.Price()))
+		d.Trades = append(d.Trades, newTradeOrder(d.Order, Zero, d.Order.Price()))
 	}
 
 	d.Trades = append(d.Trades, newTradeOrder(order, quantity, price))
@@ -76,7 +74,7 @@ func (d *Done) appendActivated(order *Order) {
 	d.Activated = append(d.Activated, order.ID())
 }
 
-func (d *Done) setLeftQuantity(quantity *fpdecimal.Decimal) {
+func (d *Done) setLeftQuantity(quantity *Decimal) {
 	if len(d.Trades) == 0 && !d.Order.IsMarketOrder() {
 		return
 	}

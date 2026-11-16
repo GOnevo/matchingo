@@ -2,14 +2,12 @@ package matchingo
 
 import (
 	"encoding/json"
-
-	"github.com/nikolaydubina/fpdecimal"
 )
 
 // Level contains Price and Volume in depth
 type Level struct {
-	Price  fpdecimal.Decimal
-	Volume fpdecimal.Decimal
+	Price  Decimal
+	Volume Decimal
 }
 
 type Depth struct {

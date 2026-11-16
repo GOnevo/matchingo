@@ -2,17 +2,15 @@ package matchingo
 
 import (
 	"encoding/json"
-
-	"github.com/nikolaydubina/fpdecimal"
 )
 
 // TradeOrder structure
 type TradeOrder struct {
 	OrderID  string
 	Role     Role
-	Price    fpdecimal.Decimal
+	Price    Decimal
 	IsQuote  bool
-	Quantity fpdecimal.Decimal
+	Quantity Decimal
 }
 
 // MarshalJSON implements Marshaler interface
@@ -33,7 +31,7 @@ func (t *TradeOrder) MarshalJSON() ([]byte, error) {
 	return json.Marshal(customStruct)
 }
 
-func newTradeOrder(order *Order, quantity, price fpdecimal.Decimal) *TradeOrder {
+func newTradeOrder(order *Order, quantity, price Decimal) *TradeOrder {
 	return &TradeOrder{
 		OrderID:  order.ID(),
 		Role:     order.Role(),
@@ -49,20 +47,20 @@ type Order struct {
 	orderType   OrderType
 	side        Side
 	isQuote     bool
-	quantity    fpdecimal.Decimal
-	originalQty fpdecimal.Decimal
-	price       fpdecimal.Decimal
+	quantity    Decimal
+	originalQty Decimal
+	price       Decimal
 	canceled    bool
 	role        Role
-	stop        fpdecimal.Decimal
+	stop        Decimal
 	tif         TIF
 	oco         string
 }
 
 // NewMarketOrder creates new constant object Order
-func NewMarketOrder(orderID string, side Side, quantity fpdecimal.Decimal) *Order {
+func NewMarketOrder(orderID string, side Side, quantity Decimal) *Order {
 
-	if quantity.LessThanOrEqual(fpdecimal.Zero) {
+	if quantity.LessThanOrEqual(Zero) {
 		panic(ErrInvalidQuantity)
 	}
 
@@ -72,15 +70,15 @@ func NewMarketOrder(orderID string, side Side, quantity fpdecimal.Decimal) *Orde
 		side:        side,
 		quantity:    quantity,
 		originalQty: quantity,
-		price:       fpdecimal.Zero,
+		price:       Zero,
 		canceled:    false,
 	}
 }
 
 // NewMarketQuoteOrder creates new constant object Order, but quantity is in Quote mode
-func NewMarketQuoteOrder(orderID string, side Side, quantity fpdecimal.Decimal) *Order {
+func NewMarketQuoteOrder(orderID string, side Side, quantity Decimal) *Order {
 
-	if quantity.LessThanOrEqual(fpdecimal.Zero) {
+	if quantity.LessThanOrEqual(Zero) {
 		panic(ErrInvalidQuantity)
 	}
 
@@ -90,20 +88,20 @@ func NewMarketQuoteOrder(orderID string, side Side, quantity fpdecimal.Decimal) 
 		side:        side,
 		quantity:    quantity,
 		originalQty: quantity,
-		price:       fpdecimal.Zero,
+		price:       Zero,
 		canceled:    false,
 		isQuote:     true,
 	}
 }
 
 // NewLimitOrder creates new constant object Order
-func NewLimitOrder(orderID string, side Side, quantity, price fpdecimal.Decimal, tif TIF, oco string) *Order {
+func NewLimitOrder(orderID string, side Side, quantity, price Decimal, tif TIF, oco string) *Order {
 
-	if quantity.LessThanOrEqual(fpdecimal.Zero) {
+	if quantity.LessThanOrEqual(Zero) {
 		panic(ErrInvalidQuantity)
 	}
 
-	if price.LessThanOrEqual(fpdecimal.Zero) {
+	if price.LessThanOrEqual(Zero) {
 		panic(ErrInvalidPrice)
 	}
 
@@ -125,13 +123,13 @@ func NewLimitOrder(orderID string, side Side, quantity, price fpdecimal.Decimal,
 }
 
 // NewStopLimitOrder creates new constant object Order
-func NewStopLimitOrder(orderID string, side Side, quantity, price, stop fpdecimal.Decimal, oco string) *Order {
+func NewStopLimitOrder(orderID string, side Side, quantity, price, stop Decimal, oco string) *Order {
 
-	if quantity.LessThanOrEqual(fpdecimal.Zero) {
+	if quantity.LessThanOrEqual(Zero) {
 		panic(ErrInvalidQuantity)
 	}
 
-	if price.LessThanOrEqual(fpdecimal.Zero) || stop.LessThanOrEqual(fpdecimal.Zero) {
+	if price.LessThanOrEqual(Zero) || stop.LessThanOrEqual(Zero) {
 		panic(ErrInvalidPrice)
 	}
 
@@ -164,32 +162,32 @@ func (o *Order) IsQuote() bool {
 }
 
 // Quantity returns Quantity field copy
-func (o *Order) Quantity() fpdecimal.Decimal {
+func (o *Order) Quantity() Decimal {
 	return o.quantity
 }
 
 // OriginalQty returns originalQty field copy
-func (o *Order) OriginalQty() fpdecimal.Decimal {
+func (o *Order) OriginalQty() Decimal {
 	return o.originalQty
 }
 
 // SetQuantity set Quantity field
-func (o *Order) SetQuantity(quantity fpdecimal.Decimal) {
+func (o *Order) SetQuantity(quantity Decimal) {
 	o.quantity = quantity
 }
 
 // DecreaseQuantity set Quantity field
-func (o *Order) DecreaseQuantity(quantity fpdecimal.Decimal) {
+func (o *Order) DecreaseQuantity(quantity Decimal) {
 	o.quantity = o.quantity.Sub(quantity)
 }
 
 // Price returns Price field copy
-func (o *Order) Price() fpdecimal.Decimal {
+func (o *Order) Price() Decimal {
 	return o.price
 }
 
 // StopPrice returns Price field copy
-func (o *Order) StopPrice() fpdecimal.Decimal {
+func (o *Order) StopPrice() Decimal {
 	return o.stop
 }
 
@@ -236,7 +234,7 @@ func (o *Order) ActivateStopOrder() {
 		panic("GetOrder isn't Stop")
 	}
 
-	o.stop = fpdecimal.Zero
+	o.stop = Zero
 
 	o.orderType = TypeLimit
 }

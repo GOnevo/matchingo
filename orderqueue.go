@@ -2,21 +2,20 @@ package matchingo
 
 import (
 	"github.com/gammazero/deque"
-	"github.com/nikolaydubina/fpdecimal"
 )
 
 // OrderQueue stores and manage chain of Orders
 type OrderQueue struct {
-	volume fpdecimal.Decimal
-	price  fpdecimal.Decimal
+	volume Decimal
+	price  Decimal
 	Orders *deque.Deque[*Order]
 }
 
 // NewOrderQueue creates and initialize OrderQueue object
-func NewOrderQueue(price fpdecimal.Decimal) *OrderQueue {
+func NewOrderQueue(price Decimal) *OrderQueue {
 	return &OrderQueue{
 		price:  price,
-		volume: fpdecimal.Zero,
+		volume: Zero,
 		Orders: deque.New[*Order](),
 	}
 }
@@ -27,12 +26,12 @@ func (oq *OrderQueue) Len() int {
 }
 
 // Price returns Price level of the queue
-func (oq *OrderQueue) Price() fpdecimal.Decimal {
+func (oq *OrderQueue) Price() Decimal {
 	return oq.price
 }
 
 // Volume returns total Orders volume
-func (oq *OrderQueue) Volume() fpdecimal.Decimal {
+func (oq *OrderQueue) Volume() Decimal {
 	return oq.volume
 }
 
@@ -48,7 +47,7 @@ func (oq *OrderQueue) Append(o *Order) {
 }
 
 // UpdateVolume subtracts consumed quantity from the price level volume.
-func (oq *OrderQueue) UpdateVolume(consumed fpdecimal.Decimal) {
+func (oq *OrderQueue) UpdateVolume(consumed Decimal) {
 	oq.volume = oq.volume.Sub(consumed)
 }
 

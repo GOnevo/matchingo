@@ -1,13 +1,12 @@
-package tests
+package orderbook
 
 import (
 	"testing"
 
 	"github.com/gonevo/matchingo"
-	"github.com/nikolaydubina/fpdecimal"
 )
 
-func TestOCOCancelsSiblingExactlyOnce(t *testing.T) {
+func TestOrderBook_OCOCancelsSiblingExactlyOnce(t *testing.T) {
 	for _, side := range []matchingo.Side{matchingo.Buy, matchingo.Sell} {
 		for _, kind := range []string{"limit", "pending-stop", "activated-stop"} {
 			t.Run(side.String()+"/"+kind, func(t *testing.T) {
@@ -26,22 +25,22 @@ func TestOCOCancelsSiblingExactlyOnce(t *testing.T) {
 					}
 					return done
 				}
-				process(matchingo.NewLimitOrder("primary", side, fpdecimal.FromInt(1), fpdecimal.FromInt(10), matchingo.GTC, "sibling"))
-				process(matchingo.NewLimitOrder("untouched", side, fpdecimal.FromInt(5), fpdecimal.FromInt(untouchedPrice), matchingo.GTC, ""))
+				process(matchingo.NewLimitOrder("primary", side, matchingo.FromInt(1), matchingo.FromInt(10), matchingo.GTC, "sibling"))
+				process(matchingo.NewLimitOrder("untouched", side, matchingo.FromInt(5), matchingo.FromInt(int(untouchedPrice)), matchingo.GTC, ""))
 				if kind == "limit" {
-					process(matchingo.NewLimitOrder("sibling", side, fpdecimal.FromInt(2), fpdecimal.FromInt(siblingPrice), matchingo.GTC, "primary"))
+					process(matchingo.NewLimitOrder("sibling", side, matchingo.FromInt(2), matchingo.FromInt(int(siblingPrice)), matchingo.GTC, "primary"))
 				} else {
-					process(matchingo.NewStopLimitOrder("sibling", side, fpdecimal.FromInt(2), fpdecimal.FromInt(siblingPrice), fpdecimal.FromInt(triggerPrice), "primary"))
+					process(matchingo.NewStopLimitOrder("sibling", side, matchingo.FromInt(2), matchingo.FromInt(int(siblingPrice)), matchingo.FromInt(int(triggerPrice)), "primary"))
 					if kind == "activated-stop" {
-						process(matchingo.NewLimitOrder("trigger-maker", opposite, fpdecimal.FromInt(1), fpdecimal.FromInt(triggerPrice), matchingo.GTC, ""))
-						process(matchingo.NewMarketOrder("trigger-taker", side, fpdecimal.FromInt(1)))
+						process(matchingo.NewLimitOrder("trigger-maker", opposite, matchingo.FromInt(1), matchingo.FromInt(int(triggerPrice)), matchingo.GTC, ""))
+						process(matchingo.NewMarketOrder("trigger-taker", side, matchingo.FromInt(1)))
 						if !book.GetOrder("sibling").IsLimitOrder() {
 							t.Fatal("stop sibling did not activate")
 						}
 					}
 				}
 				sibling := book.GetOrder("sibling")
-				done := process(matchingo.NewMarketOrder("fill-primary", opposite, fpdecimal.FromInt(1)))
+				done := process(matchingo.NewMarketOrder("fill-primary", opposite, matchingo.FromInt(1)))
 				if len(done.Canceled) != 1 || done.Canceled[0] != "sibling" {
 					t.Fatalf("canceled IDs = %v, want [sibling]", done.Canceled)
 				}
@@ -52,11 +51,11 @@ func TestOCOCancelsSiblingExactlyOnce(t *testing.T) {
 					t.Fatalf("unexpected remaining state: stops=%d, OCO=%v", book.Stop.Len(), book.OCO)
 				}
 				trade := done.GetTradeOrder("primary")
-				if trade == nil || !trade.Quantity.Equal(fpdecimal.FromInt(1)) || done.GetTradeOrder("sibling") != nil {
+				if trade == nil || !trade.Quantity.Equal(matchingo.FromInt(1)) || done.GetTradeOrder("sibling") != nil {
 					t.Fatal("unexpected trade accounting")
 				}
-				price, err := book.CalculateMarketPrice(opposite, fpdecimal.FromInt(5))
-				if err != nil || !price.Equal(fpdecimal.FromInt(untouchedPrice*5)) {
+				price, err := book.CalculateMarketPrice(opposite, matchingo.FromInt(5))
+				if err != nil || !price.Equal(matchingo.FromInt(int(untouchedPrice*5))) {
 					t.Fatalf("unrelated liquidity changed: price=%s, err=%v", price, err)
 				}
 			})

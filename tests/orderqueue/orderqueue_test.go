@@ -1,4 +1,4 @@
-package tests
+package orderqueue
 
 import (
 	"fmt"
@@ -6,18 +6,17 @@ import (
 	"time"
 
 	"github.com/gonevo/matchingo"
-	"github.com/nikolaydubina/fpdecimal"
 )
 
-func TestOrderQueue(t *testing.T) {
-	price := fpdecimal.FromInt(100)
+func TestOrderQueue_Basic(t *testing.T) {
+	price := matchingo.FromInt(100)
 	oq := matchingo.NewOrderQueue(price)
 
 	o1 := matchingo.NewLimitOrder(
 		"order-1",
 		matchingo.Buy,
-		fpdecimal.FromInt(100),
-		fpdecimal.FromInt(100),
+		matchingo.FromInt(100),
+		matchingo.FromInt(100),
 		"",
 		"",
 	)
@@ -25,8 +24,8 @@ func TestOrderQueue(t *testing.T) {
 	o2 := matchingo.NewLimitOrder(
 		"order-2",
 		matchingo.Buy,
-		fpdecimal.FromInt(100),
-		fpdecimal.FromInt(100),
+		matchingo.FromInt(100),
+		matchingo.FromInt(100),
 		"",
 		"",
 	)
@@ -38,15 +37,15 @@ func TestOrderQueue(t *testing.T) {
 		t.Fatalf("Invalid orders count(have: %d, want: 2)", oq.Orders.Len())
 	}
 
-	if !oq.Volume().Equal(fpdecimal.FromInt(200)) {
+	if !oq.Volume().Equal(matchingo.FromInt(200)) {
 		t.Fatalf("Invalid order volume (have: %s, want: 200)", oq.Volume())
 	}
 
 	o3 := matchingo.NewLimitOrder(
 		"order-3",
 		matchingo.Buy,
-		fpdecimal.FromInt(200),
-		fpdecimal.FromInt(200),
+		matchingo.FromInt(200),
+		matchingo.FromInt(200),
 		"",
 		"",
 	)
@@ -57,7 +56,7 @@ func TestOrderQueue(t *testing.T) {
 		t.Fatalf("Invalid orders count(have: %d, want: 3)", oq.Orders.Len())
 	}
 
-	if !oq.Volume().Equal(fpdecimal.FromInt(400)) {
+	if !oq.Volume().Equal(matchingo.FromInt(400)) {
 		t.Fatalf("Invalid order volume (have: %s, want: 400)", oq.Volume())
 	}
 
@@ -69,7 +68,7 @@ func TestOrderQueue(t *testing.T) {
 		t.Fatalf("Invalid orders count(have: %d, want: 2)", oq.Orders.Len())
 	}
 
-	if !oq.Volume().Equal(fpdecimal.FromInt(200)) {
+	if !oq.Volume().Equal(matchingo.FromInt(200)) {
 		t.Fatalf("Invalid order volume (have: %s, want: 200)", oq.Volume())
 	}
 
@@ -86,13 +85,13 @@ func TestOrderQueue(t *testing.T) {
 		t.Fatalf("Invalid order ID")
 	}
 
-	if !oq.Volume().Equal(fpdecimal.FromInt(100)) {
+	if !oq.Volume().Equal(matchingo.FromInt(100)) {
 		t.Fatalf("Invalid order volume (have: %s, want: 100)", oq.Volume())
 	}
 }
 
-func TestOrderQueueSlice(t *testing.T) {
-	price := fpdecimal.FromInt(100)
+func TestOrderQueue_Slice(t *testing.T) {
+	price := matchingo.FromInt(100)
 	oq := matchingo.NewOrderQueue(price)
 
 	o1 := matchingo.NewLimitOrder(
@@ -120,7 +119,7 @@ func TestOrderQueueSlice(t *testing.T) {
 		t.Fatalf("Invalid orders count(have: %d, want: 2)", oq.Orders.Len())
 	}
 
-	if !oq.Volume().Equal(fpdecimal.FromInt(200)) {
+	if !oq.Volume().Equal(matchingo.FromInt(200)) {
 		t.Fatalf("Invalid order volume (have: %s, want: 200)", oq.Volume())
 	}
 
@@ -134,20 +133,20 @@ func TestOrderQueueSlice(t *testing.T) {
 		t.Fatalf("Invalid orders count(have: %d, want: 0)", oq.Orders.Len())
 	}
 
-	if !oq.Volume().Equal(fpdecimal.FromInt(0)) {
+	if !oq.Volume().Equal(matchingo.FromInt(0)) {
 		t.Fatalf("Invalid order volume (have: %s, want: 0)", oq.Volume())
 	}
 }
 
-func TestOrderQueueUpdate(t *testing.T) {
-	price := fpdecimal.FromInt(100)
+func TestOrderQueue_Update(t *testing.T) {
+	price := matchingo.FromInt(100)
 	oq := matchingo.NewOrderQueue(price)
 
 	o1 := matchingo.NewLimitOrder(
 		"order-1",
 		matchingo.Buy,
-		fpdecimal.FromInt(100),
-		fpdecimal.FromInt(100),
+		matchingo.FromInt(100),
+		matchingo.FromInt(100),
 		"",
 		"",
 	)
@@ -155,8 +154,8 @@ func TestOrderQueueUpdate(t *testing.T) {
 	o2 := matchingo.NewLimitOrder(
 		"order-2",
 		matchingo.Buy,
-		fpdecimal.FromInt(100),
-		fpdecimal.FromInt(100),
+		matchingo.FromInt(100),
+		matchingo.FromInt(100),
 		"",
 		"",
 	)
@@ -165,7 +164,7 @@ func TestOrderQueueUpdate(t *testing.T) {
 	oq.Append(o2)
 
 	headOrder := oq.First()
-	consumed := fpdecimal.FromInt(55)
+	consumed := matchingo.FromInt(55)
 	headOrder.DecreaseQuantity(consumed)
 	oq.UpdateVolume(consumed)
 
@@ -175,10 +174,13 @@ func TestOrderQueueUpdate(t *testing.T) {
 		t.Fatalf("Invalid new price (have: %s, want: 45.000)", headOrder.Quantity().String())
 	}
 
-	if !oq.Volume().Equal(fpdecimal.FromInt(145)) {
+	if !oq.Volume().Equal(matchingo.FromInt(145)) {
 		t.Fatalf("Invalid order volume (have: %s, want: 145)", oq.Volume())
 	}
 }
+
+var BenchPrice = matchingo.FromInt(16)
+var BenchQuantity = matchingo.FromInt(150)
 
 var BenchOrderQueue = matchingo.NewOrderQueue(BenchPrice)
 
@@ -189,7 +191,7 @@ func BenchmarkOrderQueue(b *testing.B) {
 		BenchOrderQueue.Append(matchingo.NewLimitOrder(
 			fmt.Sprintf("order-%d", i),
 			matchingo.Buy,
-			fpdecimal.FromInt(int64(i)),
+			matchingo.FromInt(int(i)),
 			BenchPrice,
 			"",
 			"",
