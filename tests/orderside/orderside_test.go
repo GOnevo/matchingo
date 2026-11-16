@@ -315,6 +315,89 @@ func TestOrderSide_CanSellOrderBeFilled(t *testing.T) {
 	}
 }
 
+func TestOrderSide_CanOrderBeFilled(t *testing.T) {
+	askSide := matchingo.NewOrderSideAsk()
+	askSide.Append(matchingo.NewLimitOrder("ask-1", matchingo.Sell, matchingo.FromInt(10), matchingo.FromInt(100), "", ""))
+	askSide.Append(matchingo.NewLimitOrder("ask-2", matchingo.Sell, matchingo.FromInt(5), matchingo.FromInt(110), "", ""))
+
+	if !askSide.CanOrderBeFilled(matchingo.Buy, matchingo.FromInt(110), matchingo.FromInt(10)) {
+		t.Fatal("buy order should be fillable on ask side")
+	}
+	if askSide.CanOrderBeFilled(matchingo.Buy, matchingo.FromInt(110), matchingo.FromInt(20)) {
+		t.Fatal("buy order should not be fillable with insufficient quantity")
+	}
+
+	bidSide := matchingo.NewOrderSideBid()
+	bidSide.Append(matchingo.NewLimitOrder("bid-1", matchingo.Buy, matchingo.FromInt(10), matchingo.FromInt(100), "", ""))
+	bidSide.Append(matchingo.NewLimitOrder("bid-2", matchingo.Buy, matchingo.FromInt(5), matchingo.FromInt(90), "", ""))
+
+	if !bidSide.CanOrderBeFilled(matchingo.Sell, matchingo.FromInt(90), matchingo.FromInt(10)) {
+		t.Fatal("sell order should be fillable on bid side")
+	}
+	if bidSide.CanOrderBeFilled(matchingo.Sell, matchingo.FromInt(90), matchingo.FromInt(20)) {
+		t.Fatal("sell order should not be fillable with insufficient quantity")
+	}
+}
+
+func TestOrderSide_CanOrderBeFilled_Panic(t *testing.T) {
+	askSide := matchingo.NewOrderSideAsk()
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatal("CanOrderBeFilled should panic on unrecognized side")
+			}
+		}()
+		askSide.CanOrderBeFilled(matchingo.Side(99), matchingo.FromInt(100), matchingo.FromInt(10))
+	}()
+}
+
+func TestOrderSide_CanBuyOrderBeFilled_Empty(t *testing.T) {
+	askSide := matchingo.NewOrderSideAsk()
+	if askSide.CanBuyOrderBeFilled(matchingo.FromInt(100), matchingo.FromInt(10)) {
+		t.Fatal("empty side should not be fillable")
+	}
+}
+
+func TestOrderSide_CanSellOrderBeFilled_Empty(t *testing.T) {
+	bidSide := matchingo.NewOrderSideBid()
+	if bidSide.CanSellOrderBeFilled(matchingo.FromInt(100), matchingo.FromInt(10)) {
+		t.Fatal("empty side should not be fillable")
+	}
+}
+
+func TestOrderSide_NextLevel(t *testing.T) {
+	orderSide := matchingo.NewOrderSideAsk()
+
+	if orderSide.NextLevel(matchingo.FromInt(100)) != nil {
+		t.Fatal("NextLevel on empty side should return nil")
+	}
+
+	orderSide.Append(matchingo.NewLimitOrder("ask-1", matchingo.Sell, matchingo.FromInt(10), matchingo.FromInt(100), "", ""))
+	orderSide.Append(matchingo.NewLimitOrder("ask-2", matchingo.Sell, matchingo.FromInt(10), matchingo.FromInt(110), "", ""))
+	orderSide.Append(matchingo.NewLimitOrder("ask-3", matchingo.Sell, matchingo.FromInt(10), matchingo.FromInt(120), "", ""))
+
+	next := orderSide.NextLevel(matchingo.FromInt(100))
+	if next == nil {
+		t.Fatal("NextLevel should return the next price level")
+	}
+	if !next.Price().Equal(matchingo.FromInt(110)) {
+		t.Fatal("NextLevel should return price 110")
+	}
+
+	next = orderSide.NextLevel(matchingo.FromInt(110))
+	if next == nil {
+		t.Fatal("NextLevel should return the next price level")
+	}
+	if !next.Price().Equal(matchingo.FromInt(120)) {
+		t.Fatal("NextLevel should return price 120")
+	}
+
+	next = orderSide.NextLevel(matchingo.FromInt(120))
+	if next != nil {
+		t.Fatal("NextLevel past last level should return nil")
+	}
+}
+
 var BenchPrice = matchingo.FromInt(16)
 var BenchQuantity = matchingo.FromInt(150)
 

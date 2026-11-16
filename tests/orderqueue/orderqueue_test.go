@@ -8,6 +8,15 @@ import (
 	"github.com/gonevo/matchingo"
 )
 
+func TestOrderQueue_SliceEmpty(t *testing.T) {
+	price := matchingo.FromInt(100)
+	oq := matchingo.NewOrderQueue(price)
+	slice := oq.Slice()
+	if slice != nil {
+		t.Fatal("Slice on empty queue should return nil")
+	}
+}
+
 func TestOrderQueue_Basic(t *testing.T) {
 	price := matchingo.FromInt(100)
 	oq := matchingo.NewOrderQueue(price)

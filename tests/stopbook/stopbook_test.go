@@ -144,3 +144,28 @@ func TestStopBook_RemoveByID(t *testing.T) {
 		t.Fatal("invalid orders count")
 	}
 }
+
+func TestStopBook_String(t *testing.T) {
+	stopBook := matchingo.NewStopBook()
+	s := stopBook.String()
+	if s != "" {
+		t.Fatal("empty stopbook String should be empty")
+	}
+
+	o1 := matchingo.NewStopLimitOrder("stop-1", matchingo.Buy, matchingo.FromInt(10), matchingo.FromInt(10), matchingo.FromInt(10), "")
+	stopBook.Append(o1)
+	s = stopBook.String()
+	if s == "" {
+		t.Fatal("stopbook String should not be empty after append")
+	}
+}
+
+func TestStopBook_AppendDuplicateID(t *testing.T) {
+	stopBook := matchingo.NewStopBook()
+	o1 := matchingo.NewStopLimitOrder("dup-1", matchingo.Buy, matchingo.FromInt(10), matchingo.FromInt(10), matchingo.FromInt(10), "")
+	stopBook.Append(o1)
+	stopBook.Append(o1)
+	if stopBook.Len() != 1 {
+		t.Fatal("duplicate append should not increase count")
+	}
+}

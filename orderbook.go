@@ -67,12 +67,6 @@ func (ob *OrderBook) Process(order *Order) (done *Done, err error) {
 	if order.Quantity().LessThanOrEqual(Zero) {
 		return nil, ErrInvalidQuantity
 	}
-	if !order.IsMarketOrder() && order.Price().LessThanOrEqual(Zero) {
-		return nil, ErrInvalidPrice
-	}
-	if order.IsStopOrder() && order.StopPrice().LessThanOrEqual(Zero) {
-		return nil, ErrInvalidPrice
-	}
 	if ob.GetOrder(order.ID()) != nil {
 		return nil, ErrOrderExists
 	}
@@ -85,11 +79,7 @@ func (ob *OrderBook) Process(order *Order) (done *Done, err error) {
 		return ob.processLimitOrder(order)
 	}
 
-	if order.IsStopOrder() {
-		return ob.processStopOrder(order)
-	}
-
-	panic("unrecognized order type")
+	return ob.processStopOrder(order)
 }
 
 // CalculateMarketPrice returns total market Price for requested quantity
@@ -128,11 +118,6 @@ func (ob *OrderBook) CalculateMarketPrice(side Side, quantity Decimal) (price De
 
 // private methods
 
-func (ob *OrderBook) deleteStopOrder(order *Order) *Order {
-	ob.Stop.Remove(order)
-	return order
-}
-
 func (ob *OrderBook) deleteStopOrderByID(orderID string) *Order {
 	return ob.Stop.RemoveByID(orderID)
 }
@@ -151,21 +136,8 @@ func (ob *OrderBook) deleteOrder(order *Order) *Order {
 	return order
 }
 
-func (ob *OrderBook) deleteOrderByID(orderID string) *Order {
-	order := ob.GetOrder(orderID)
-	if order == nil {
-		return nil
-	}
-
-	return ob.deleteOrder(order)
-}
-
 func (ob *OrderBook) processMarketOrder(marketOrder *Order) (done *Done, err error) {
 	quantity := marketOrder.quantity
-
-	if quantity.LessThanOrEqual(Zero) {
-		return nil, ErrInvalidQuantity
-	}
 
 	var (
 		side *OrderSide
@@ -279,20 +251,14 @@ func (ob *OrderBook) processStopOrder(stopOrder *Order) (done *Done, err error) 
 }
 
 func (ob *OrderBook) appendLimitOrder(order *Order) {
-	if order.IsLimitOrder() {
-		if order.Side() == Buy {
-			ob.bids.Append(order)
-		}
-		if order.Side() == Sell {
-			ob.asks.Append(order)
-		}
-
-		ob.orders[order.ID()] = order
-
-		return
+	if order.Side() == Buy {
+		ob.bids.Append(order)
+	}
+	if order.Side() == Sell {
+		ob.asks.Append(order)
 	}
 
-	panic("order has not LIMIT type")
+	ob.orders[order.ID()] = order
 }
 
 func (ob *OrderBook) activateStopOrders(price Decimal) []*Order {

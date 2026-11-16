@@ -1,79 +1,173 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/gonevo/matchingo)](https://goreportcard.com/report/github.com/gonevo/matchingo)
-![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/gonevo/matchingo)
-![GitHub](https://img.shields.io/github/license/gonevo/matchingo)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/gonevo/matchingo)](https://github.com/gonevo/matchingo)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Test Coverage](https://gocov.io/?package=github.com/gonevo/matchingo)](https://gocov.io/?package=github.com/gonevo/matchingo)
 
 # Matchingo
 
-Incredibly fast matching engine for HFT written in Golang
+High-performance order matching engine for cryptocurrency exchanges, written in Go.
 
-### Features
+Matchingo implements a standard price-time priority matching algorithm with support for market, limit, and stop-limit orders, as well as OCO (One-Cancels-Other) order pairs. It is designed for high-frequency trading (HFT) scenarios where low latency and minimal allocations are critical.
 
-- supports **MARKET**, **LIMIT**, **STOP-LIMIT**, **OCO** order types
-- supports _time-in-force_ (**GTK**, **FOK**, **IOC**) parameters for **LIMIT** orders
-- does not use [shopspring/decimal](https://github.com/shopspring/decimal) for higher performance
-- uses [lite decimal](https://github.com/nikolaydubina/fpdecimal) for price and quantity arguments
-- well tested code
+## Table of Contents
 
-##### Order quantity
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [API Reference](#api-reference)
+  - [Decimal](#decimal)
+  - [Creating Orders](#creating-orders)
+  - [Processing Orders](#processing-orders)
+  - [Done Result](#done-result)
+  - [Order Lookup](#order-lookup)
+  - [Canceling Orders](#canceling-orders)
+  - [Order Book Depth](#order-book-depth)
+  - [Market Price Calculation](#market-price-calculation)
+- [Order Quantity & Quote Mode](#order-quantity--quote-mode)
+- [Time in Force](#time-in-force)
+- [OCO Orders](#oco-orders)
+- [Stop-Limit Orders](#stop-limit-orders)
+- [Error Handling](#error-handling)
+- [Running Tests](#running-tests)
+- [Benchmark](#benchmark)
+- [Contributing](#contributing)
+- [Security](#security)
+- [License](#license)
 
-> **It is very important!** Each SYMBOL is combination of BASE and QUOTE currencies.
-> For example, **BTC/USD** where **BTC** is **BASE** currency, **USD** is **QUOTE** currency.
+## Features
 
-Each order **MUST HAVE** _quantity_ parameter but **pay attention**:
-for **MARKET BUY** orders you have pass **QUOTE quantity**.
+- **Order types**: `MARKET`, `LIMIT`, `STOP-LIMIT`
+- **Time-in-force**: `GTC` (Good Till Cancel), `FOK` (Fill or Kill), `IOC` (Immediate or Cancel)
+- **OCO (One-Cancels-Other)**: pair orders where filling one cancels the other
+- **Quote-mode market orders**: specify market buy quantity in quote currency for accurate balance freezing
+- **High performance**: uses [fpdecimal](https://github.com/nikolaydubina/fpdecimal) instead of [shopspring/decimal](https://github.com/shopspring/decimal) for lower allocation overhead
+- **Well tested**: comprehensive test suite covering order book, stop book, order queue, and decimal operations
 
-Examples for **BTC/USD** symbol:
-
-- for **MARKET** **SELL** order 10 BTC, you have to pass quantity=10
-- for **MARKET** **BUY** order 10 BTC, you have to pass maximum quantity of USD for attempt to buy 10 BTC
-
-> This may seem inconvenient, but it is a precautionary measure for **double spending**: when a user places a
-> **MARKET** **BUY** in asynchronous way, you will be able to freeze the correct quantity on his balance.
-
-### Installation
+## Installation
 
 ```shell
 go get github.com/gonevo/matchingo
 ```
 
-### Usage
+## Quick Start
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/gonevo/matchingo"
+)
+
+func main() {
+	ob := matchingo.NewOrderBook()
+	matchingo.SetDecimalFraction(5) // set decimal precision (default: 3)
+
+	// Place a limit sell order: 10 units at price 10
+	done1, _ := ob.Process(matchingo.NewLimitOrder(
+		"order1", matchingo.Sell,
+		matchingo.FromInt(10), matchingo.FromInt(10),
+		"", "",
+	))
+	fmt.Println(done1)
+
+	// Place a limit buy order: 5 units at price 10 (will match with order1)
+	done2, _ := ob.Process(matchingo.NewLimitOrder(
+		"order2", matchingo.Buy,
+		matchingo.FromInt(5), matchingo.FromInt(10),
+		"", "",
+	))
+	fmt.Println(done2)
+
+	// Place a market buy order
+	done3, _ := ob.Process(matchingo.NewMarketOrder(
+		"order3", matchingo.Buy,
+		matchingo.FromFloat(5),
+	))
+	fmt.Println(done3)
+}
+```
+
+See [`example/main.go`](example/main.go) for a runnable example, or run:
+
+```shell
+make example
+```
+
+## API Reference
 
 ### Decimal
-Matchingo works with fpdecimal values, so feel free to use:
 
-- `matchingo.FromInt(number int)`
-- `matchingo.FromFloat(number float64)`
+Matchingo uses a `Decimal` type built on [fpdecimal](https://github.com/nikolaydubina/fpdecimal) for precise price and quantity arithmetic.
 
-#### Order instance initialization parameters
+| Function | Description |
+|---|---|
+| `matchingo.FromInt(n int)` | Create a Decimal from an integer |
+| `matchingo.FromFloat(f float64)` | Create a Decimal from a float64 |
+| `matchingo.FromString(s string)` | Parse a Decimal from a string |
+| `matchingo.FromIntScaled(n int64)` | Create a Decimal from a scaled integer |
+| `matchingo.SetDecimalFraction(precision int)` | Set global decimal precision (default: 3) |
+| `matchingo.Zero` | Zero value constant |
 
-- `matchingo.NewMarketOrder(orderID string, side Side, quantity fpdecimal.Decimal)`
-- `matchingo.NewLimitOrder(orderID string, side Side, quantity, price fpdecimal.Decimal, tif TIF, oco string)`
-- `matchingo.NewStopOrder(orderID string, side Side, quantity, price, stop fpdecimal.Decimal, oco string)`
+Decimal supports arithmetic operations: `Add`, `Sub`, `Mul`, `Div`, and comparisons: `Equal`, `LessThan`, `LessThanOrEqual`, `GreaterThan`, `GreaterThanOrEqual`, `Compare`.
 
-> oco parameter is ID of another order from **OCO** orders set
+### Creating Orders
 
-#### Order processing
+| Constructor | Description |
+|---|---|
+| `NewMarketOrder(id string, side Side, quantity Decimal)` | Market order (base quantity) |
+| `NewMarketQuoteOrder(id string, side Side, quantity Decimal)` | Market order with quantity in quote currency |
+| `NewLimitOrder(id string, side Side, quantity, price Decimal, tif TIF, oco string)` | Limit order with optional TIF and OCO |
+| `NewStopLimitOrder(id string, side Side, quantity, price, stop Decimal, oco string)` | Stop-limit order with optional OCO |
 
-- `matchingo.Process(order *Order) (done *Done, err Error)`
+**Parameters:**
 
-#### Done instance
+- `id` — unique order identifier
+- `side` — `matchingo.Buy` or `matchingo.Sell`
+- `quantity` — order quantity (base currency, unless quote mode)
+- `price` — limit price (for limit and stop-limit orders)
+- `stop` — stop price (for stop-limit orders)
+- `tif` — time-in-force: `""` (GTC), `matchingo.GTC`, `matchingo.FOK`, or `matchingo.IOC`
+- `oco` — ID of the paired OCO order (empty string if not paired)
 
-**Process()** returns **Done** instance which contains:
+### Processing Orders
 
-- **Order**: processed order
-- **Trades**: slice of orders from the order book which are participants for this trade
-    - **OrderID**: participant-order ID
-    - **Price**: concrete trade price, string
-    - **Quantity**: concrete trade quantity, string
-    - **Role**: **TAKER** or **MAKER**, string
-    - **IsQuote**: _true_ for **QUOTE quantity** orders
-- **Canceled**: slice of order IDs which was cancelled for this processing (**IOC**, **OCO**), can be empty
-- **Activated**: slice of order IDs which was activated for this processing (**STOP** orders), can be empty
-- **Left**: _fpdecimal.Decimal_ value of left quantity for this processing, can be _fpdecimal.Zero_
-- **Processed**: _fpdecimal.Decimal_ value of processed quantity for this processing, can be _fpdecimal.Zero_
-- **Stored**: boolean, _true_ if order or its part was appended to **stop book** or **order book**
+Every `OrderBook` instance processes orders independently:
 
-For example:
+```go
+ob := matchingo.NewOrderBook()
+done, err := ob.Process(order)
+```
+
+`Process` accepts `MARKET`, `LIMIT`, and `STOP-LIMIT` orders. It returns a `*Done` result and an error if the order is invalid.
+
+### Done Result
+
+`Process` returns a `*Done` struct containing the full trade outcome:
+
+| Field | Type | Description |
+|---|---|---|
+| `Order` | `*Order` | The processed order |
+| `Trades` | `[]TradeOrder` | Trade details for each matched pair |
+| `Canceled` | `[]string` | Order IDs canceled during processing (IOC, OCO) |
+| `Activated` | `[]string` | Stop order IDs activated during processing |
+| `Stored` | `bool` | `true` if the order (or remainder) was stored in the book |
+| `Quantity` | `Decimal` | Original order quantity |
+| `Left` | `Decimal` | Remaining unfilled quantity |
+| `Processed` | `Decimal` | Total filled quantity |
+
+Each `TradeOrder` in `Trades` contains:
+
+| Field | Type | Description |
+|---|---|---|
+| `OrderID` | `string` | Participant order ID |
+| `Role` | `Role` | `MAKER` or `TAKER` |
+| `Price` | `Decimal` | Execution price |
+| `Quantity` | `Decimal` | Trade quantity |
+| `IsQuote` | `bool` | `true` if quantity is in quote currency |
+
+`Done` implements `MarshalJSON` and `String` for easy serialization:
 
 ```json
 {
@@ -108,94 +202,204 @@ For example:
 }
 ```
 
-### Search
-You can search your order at any time using ID
+### Order Lookup
 
-- `matchingo.GetOrder(id string) *Order`
+Retrieve an order by its ID:
 
-> it returns an instance of Order or nil if Order not found
+```go
+order := ob.GetOrder("order1") // returns *Order or nil
+```
 
-### Canceling
-You can cancel your order at any time
+### Canceling Orders
 
-- `matchingo.CancelOrder(id string) *Order`
+Cancel an order by its ID:
 
-> it returns an instance of Order if it was canceled or nil if Order not found
+```go
+order := ob.CancelOrder("order1") // returns *Order if canceled, nil if not found
+```
 
-### Depth
-You can see orderbook depth at any time
+This works for orders in both the order book and the stop book.
 
-- `matchingo.Depth() map[string]string`
-- `matchingo.DepthJSON() string`
+### Order Book Depth
 
-For example:
+Get the current bid/ask depth:
+
+```go
+depth := ob.Depth()      // *Depth struct with Ask and Bid maps
+jsonStr := ob.DepthJSON() // JSON string representation
+```
+
+Example output:
+
 ```json
 {
-   "ask": {
-      "21.00000": "20.00000",
-      "22.00000": "10.00000",
-      "23.00000": "20.00000"
-   },
-   "bid": {
-      "10.00000": "20.00000",
-      "11.00000": "10.00000",
-      "12.00000": "20.00000"
-   }
+  "ask": {
+    "21.00000": "20.00000",
+    "22.00000": "10.00000",
+    "23.00000": "20.00000"
+  },
+  "bid": {
+    "10.00000": "20.00000",
+    "11.00000": "10.00000",
+    "12.00000": "20.00000"
+  }
 }
 ```
 
-> where key is a price, value is a volume 
+Where each key is a price level and each value is the total volume at that level.
 
-### Example
+### Market Price Calculation
 
-```golang
-package main
+Estimate the total cost to fill a market order of a given size:
 
-import (
-	"fmt"
+```go
+price, err := ob.CalculateMarketPrice(matchingo.Buy, matchingo.FromInt(100))
+```
 
-	"github.com/gonevo/matchingo"
+Returns `ErrInsufficientQuantity` if the order book cannot fully fill the requested quantity.
+
+## Order Quantity & Quote Mode
+
+Each trading symbol combines a **BASE** and a **QUOTE** currency (e.g., `BTC/USD` where `BTC` is "base" and `USD` is "quote").
+
+For **MARKET SELL** orders, the quantity is in the base currency:
+
+```go
+// Sell 10 BTC
+ob.Process(matchingo.NewMarketOrder("sell1", matchingo.Sell, matchingo.FromInt(10)))
+```
+
+For **MARKET BUY** orders, you can use quote-mode to specify the maximum quote currency to spend:
+
+```go
+// Buy BTC with up to 1000 USD
+ob.Process(matchingo.NewMarketQuoteOrder("buy1", matchingo.Buy, matchingo.FromInt(1000)))
+```
+
+This is a safety measure against double spending: when placing a market buy asynchronously, you can freeze the exact quote amount on the user's balance before execution.
+
+## Time in Force
+
+Limit orders support three time-in-force modes:
+
+| TIF | Behavior |
+|---|---|
+| `GTC` (Good Till Cancel) | Order remains in the book until fully filled or manually canceled (default) |
+| `FOK` (Fill or Kill) | Order is canceled immediately if it cannot be filled in its entirety |
+| `IOC` (Immediate or Cancel) | Order fills as much as possible immediately; the remainder is canceled |
+
+```go
+// Fill-or-kill limit order
+ob.Process(matchingo.NewLimitOrder(
+	"order1", matchingo.Buy,
+	matchingo.FromInt(10), matchingo.FromInt(100),
+	matchingo.FOK, "",
+))
+```
+
+## OCO Orders
+
+OCO (One-Cancels-Other) pairs two orders so that filling one automatically cancels the other. Pass the paired order's ID as the `oco` parameter:
+
+```go
+orderA := matchingo.NewLimitOrder("a", matchingo.Sell, matchingo.FromInt(10), matchingo.FromInt(100), "", "b")
+orderB := matchingo.NewLimitOrder("b", matchingo.Sell, matchingo.FromInt(10), matchingo.FromInt(90), "", "a")
+
+ob.Process(orderA)
+ob.Process(orderB)
+// If orderA fills, orderB is automatically canceled (and vice versa)
+```
+
+## Stop-Limit Orders
+
+A stop-limit order sits in the stop book until the market price reaches the stop price, at which point it becomes a limit order:
+
+```go
+stopOrder := matchingo.NewStopLimitOrder(
+	"stop1", matchingo.Sell,
+	matchingo.FromInt(5),   // quantity
+	matchingo.FromInt(95),  // limit price
+	matchingo.FromInt(90),  // stop price
+	"",                     // oco
 )
-
-func main() {
-	orderBook := matchingo.NewOrderBook()
-	matchingo.SetDecimalFraction(5) // default is 3
-
-	done1, _ := orderBook.Process(matchingo.NewLimitOrder("order1", matchingo.Sell, matchingo.FromInt(10), matchingo.FromInt(10), "", ""))
-	fmt.Println(done1)
-	fmt.Println(orderBook)
-
-	done2, _ := orderBook.Process(matchingo.NewLimitOrder("order2", matchingo.Buy, matchingo.FromInt(5), matchingo.FromInt(10), "", ""))
-	fmt.Println(done2)
-	fmt.Println(orderBook)
-
-	done3, _ := orderBook.Process(matchingo.NewMarketOrder("order3", matchingo.Buy, matchingo.FromFloat(5)))
-	fmt.Println(done3)
-	fmt.Println(orderBook)
-}
+ob.Process(stopOrder)
 ```
 
-### Benchmark
+When the stop price is touched during matching, the order activates and enters the order book as a limit order. Activated order IDs appear in the `Done.Activated` slice.
+
+## Error Handling
+
+`Process` returns these errors for invalid input:
+
+| Error | Condition |
+|---|---|
+| `ErrInvalidOrder` | Order is nil or not MARKET/LIMIT/STOP-LIMIT |
+| `ErrInvalidSide` | Side is neither Buy nor Sell |
+| `ErrCanceledOrder` | Order has already been canceled |
+| `ErrInvalidQuantity` | Quantity is zero or negative |
+| `ErrInvalidPrice` | Price is zero or negative |
+| `ErrInvalidTif` | TIF value is not GTC, FOK, or IOC |
+| `ErrOrderExists` | An order with the same ID already exists |
+| `ErrInsufficientQuantity` | Not enough volume to calculate market price |
+
+Order constructors (`NewMarketOrder`, `NewLimitOrder`, `NewStopLimitOrder`) panic on invalid quantity or price.
+
+## Running Tests
 
 ```shell
-goos: linux
-goarch: amd64
-cpu: Intel(R) Core(TM) i7-8565U CPU @ 1.80GHz
-BenchmarkLimitOrders-8 
-
-Transactions per second (avg): 1139342.359570
- 1000000              1755 ns/op            1011 B/op         14 allocs/op
-
+make test         # run all tests
+make test-verbose # run tests with verbose output
+make bench        # run benchmarks
+make coverage     # show test coverage report
+make example      # run the example
 ```
 
-### License
+## Benchmark
 
-**matchingo** is open-sourced software licensed under the [MIT license](./LICENSE.md).
+```
+goos: darwin
+goarch: arm64
+pkg: github.com/gonevo/matchingo/tests/orderbook
+cpu: Apple M2
+BenchmarkLimitOrders-8    15819102    73.58 ns/op    288 B/op    2 allocs/op
+```
 
-[Vano Devium](https://github.com/vanodevium/)
+## Contributing
+
+Contributions are welcome! Here's how you can help:
+
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/my-improvement`)
+3. **Commit** your changes (`git commit -am 'Add new feature'`)
+4. **Push** to the branch (`git push origin feature/my-improvement`)
+5. **Open** a Pull Request
+
+Please ensure:
+
+- All tests pass (`make test`)
+- Code is formatted (`make fix`)
+- New features include tests
+
+## Security
+
+Matchingo is intended for use in exchange backends where proper input validation and authorization should be handled by the surrounding application layer.
+
+If you discover a security vulnerability, please report it responsibly:
+
+1. **Do not** open a public issue
+2. Email the maintainer at the repository's contact or open a private security advisory via GitHub
+3. Allow reasonable time for a fix before public disclosure
+
+This project follows standard responsible disclosure practices.
+
+## License
+
+**matchingo** is open-source software licensed under the [MIT License](./LICENSE.md).
 
 ---
 
+Built by [Vano Devium](https://github.com/vanodevium/)
+
 Made with ❤️ in Ukraine
 
-[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/vanodevium)
+[![Buy Me A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/vanodevium)

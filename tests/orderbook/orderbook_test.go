@@ -3,7 +3,6 @@ package orderbook
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/gonevo/matchingo"
 )
@@ -15,6 +14,80 @@ func addDepth(ob *matchingo.OrderBook, prefix string, quantity matchingo.Decimal
 
 	for i := 100; i < 150; i = i + 10 {
 		ob.Process(matchingo.NewLimitOrder(fmt.Sprintf("%ssell-%d", prefix, i), matchingo.Sell, quantity, matchingo.FromInt(int(i)), "", ""))
+	}
+}
+
+func TestOrderBook_ProcessStopOrderZeroStopPrice(t *testing.T) {
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatal("NewStopLimitOrder should panic on zero stop price")
+			}
+		}()
+		matchingo.NewStopLimitOrder("bad", matchingo.Buy, matchingo.FromInt(1), matchingo.FromInt(10), matchingo.FromInt(0), "")
+	}()
+}
+
+func TestOrderBook_checkOCO_SiblingNotFilled(t *testing.T) {
+	ob := matchingo.NewOrderBook()
+	ob.Process(matchingo.NewLimitOrder("sibling", matchingo.Buy, matchingo.FromInt(2), matchingo.FromInt(90), matchingo.GTC, "primary"))
+	done, err := ob.Process(matchingo.NewLimitOrder("primary", matchingo.Buy, matchingo.FromInt(1), matchingo.FromInt(95), matchingo.GTC, "sibling"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(done.Canceled) > 0 {
+		t.Fatal("OCO should not cancel sibling when primary is not filled")
+	}
+	if !done.Stored {
+		t.Fatal("primary should be stored")
+	}
+}
+
+func TestOrderBook_checkOCO_SiblingCanceledAfterPrimaryFill(t *testing.T) {
+	ob := matchingo.NewOrderBook()
+	ob.Process(matchingo.NewLimitOrder("primary", matchingo.Sell, matchingo.FromInt(1), matchingo.FromInt(100), matchingo.GTC, "sibling"))
+	ob.Process(matchingo.NewMarketOrder("fill-primary", matchingo.Buy, matchingo.FromInt(1)))
+	done, err := ob.Process(matchingo.NewLimitOrder("sibling", matchingo.Sell, matchingo.FromInt(2), matchingo.FromInt(110), matchingo.GTC, "primary"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if done.Order.IsCanceled() {
+		t.Fatal("sibling should be marked canceled by checkOCO")
+	}
+}
+
+func TestOrderBook_cancelOCO_NilOrder(t *testing.T) {
+	ob := matchingo.NewOrderBook()
+	ob.Process(matchingo.NewLimitOrder("maker", matchingo.Sell, matchingo.FromInt(1), matchingo.FromInt(10), matchingo.GTC, "ghost"))
+	done, err := ob.Process(matchingo.NewMarketOrder("fill-maker", matchingo.Buy, matchingo.FromInt(1)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(done.Canceled) > 0 {
+		t.Fatal("should not cancel a nil order when OCO sibling does not exist")
+	}
+}
+
+func TestOrderBook_DepthJSON(t *testing.T) {
+	ob := matchingo.NewOrderBook()
+	ob.Process(matchingo.NewLimitOrder("sell-1", matchingo.Sell, matchingo.FromInt(10), matchingo.FromInt(100), "", ""))
+	ob.Process(matchingo.NewLimitOrder("buy-1", matchingo.Buy, matchingo.FromInt(5), matchingo.FromInt(90), "", ""))
+	jsonStr := ob.DepthJSON()
+	if jsonStr == "" {
+		t.Fatal("DepthJSON should not return empty string")
+	}
+	if len(jsonStr) < 2 {
+		t.Fatal("DepthJSON should return valid JSON")
+	}
+}
+
+func TestOrderBook_String(t *testing.T) {
+	ob := matchingo.NewOrderBook()
+	ob.Process(matchingo.NewLimitOrder("sell-1", matchingo.Sell, matchingo.FromInt(10), matchingo.FromInt(100), "", ""))
+	ob.Process(matchingo.NewLimitOrder("buy-1", matchingo.Buy, matchingo.FromInt(5), matchingo.FromInt(90), "", ""))
+	s := ob.String()
+	if s == "" {
+		t.Fatal("String should not return empty string")
 	}
 }
 
@@ -451,7 +524,6 @@ func TestOrderBook_PartialFillVolumeConservationSingleOrder(t *testing.T) {
 	}
 }
 
-var benchOb = matchingo.NewOrderBook()
 var BenchPrice = matchingo.FromInt(16)
 var BenchQuantity = matchingo.FromInt(150)
 
@@ -465,22 +537,22 @@ var benchIDs = func() []string {
 }()
 
 func BenchmarkAppendLimitOrders(b *testing.B) {
-	stopwatch := time.Now()
+	ob := matchingo.NewOrderBook()
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		benchOb.Process(matchingo.NewLimitOrder(benchIDs[i%len(benchIDs)], matchingo.Buy, BenchQuantity, BenchPrice, "", ""))
+		ob.Process(matchingo.NewLimitOrder(benchIDs[i%len(benchIDs)], matchingo.Buy, BenchQuantity, BenchPrice, "", ""))
 	}
-	elapsed := time.Since(stopwatch)
-	fmt.Printf("Elapsed: %s\nTransactions per second (avg): %f\n", elapsed, float64(b.N*2)/elapsed.Seconds())
+	b.StopTimer()
 }
 
 func BenchmarkLimitOrders(b *testing.B) {
-	stopwatch := time.Now()
+	ob := matchingo.NewOrderBook()
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		benchOb.Process(matchingo.NewLimitOrder(benchIDs[i%len(benchIDs)], matchingo.Sell, BenchQuantity, BenchPrice, "", ""))
+		ob.Process(matchingo.NewLimitOrder(benchIDs[i%len(benchIDs)], matchingo.Sell, BenchQuantity, BenchPrice, "", ""))
 	}
 	for i := 0; i < b.N; i++ {
-		benchOb.Process(matchingo.NewLimitOrder(benchIDs[i%len(benchIDs)], matchingo.Buy, BenchQuantity, BenchPrice, "", ""))
+		ob.Process(matchingo.NewLimitOrder(benchIDs[i%len(benchIDs)], matchingo.Buy, BenchQuantity, BenchPrice, "", ""))
 	}
-	elapsed := time.Since(stopwatch)
-	fmt.Printf("Elapsed: %s\nTransactions per second (avg): %f\n", elapsed, float64(b.N*2)/elapsed.Seconds())
+	b.StopTimer()
 }
