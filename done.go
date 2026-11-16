@@ -77,7 +77,7 @@ func (d *Done) appendActivated(order *Order) {
 }
 
 func (d *Done) setLeftQuantity(quantity *fpdecimal.Decimal) {
-	if len(d.Trades) == 0 {
+	if len(d.Trades) == 0 && !d.Order.IsMarketOrder() {
 		return
 	}
 	d.Left = *quantity

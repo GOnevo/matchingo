@@ -2,7 +2,6 @@ package matchingo
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/nikolaydubina/fpdecimal"
 )
@@ -28,14 +27,12 @@ func (ob *OrderBook) Depth() *Depth {
 	}
 
 	level = ob.asks.BestPriceQueue()
-	fmt.Println(level)
 	for level != nil {
 		depth.Ask[level.Price().String()] = level.Volume().String()
 		level = ob.asks.NextLevel(level.Price())
 	}
 
 	level = ob.bids.BestPriceQueue()
-	fmt.Println(level)
 	for level != nil {
 		depth.Bid[level.Price().String()] = level.Volume().String()
 		level = ob.bids.NextLevel(level.Price())
