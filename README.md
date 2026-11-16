@@ -61,8 +61,8 @@ import (
 )
 
 func main() {
-	ob := matchingo.NewOrderBook()
 	matchingo.SetDecimalFraction(5) // set decimal precision (default: 3)
+	ob := matchingo.NewOrderBook()
 
 	// Place a limit sell order: 10 units at price 10
 	done1, _ := ob.Process(matchingo.NewLimitOrder(

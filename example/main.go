@@ -7,8 +7,8 @@ import (
 )
 
 func main() {
-	orderBook := matchingo.NewOrderBook()
 	matchingo.SetDecimalFraction(5) // default is 3
+	orderBook := matchingo.NewOrderBook()
 
 	done1, _ := orderBook.Process(matchingo.NewLimitOrder("order1", matchingo.Sell, matchingo.FromInt(10), matchingo.FromInt(10), "", ""))
 	fmt.Println(done1)
