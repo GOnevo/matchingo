@@ -362,19 +362,21 @@ func (ob *OrderBook) appendToOCO(order *Order, done *Done) {
 }
 
 func (ob *OrderBook) cancelOCO(orderID string, done *Done) {
-	canceledOrder := ob.deleteStopOrderByID(orderID)
-	if canceledOrder != nil {
-		canceledOrder.Cancel()
-		delete(ob.OCO, orderID)
-		done.appendCanceled(canceledOrder)
+	canceledOrder := ob.GetOrder(orderID)
+	if canceledOrder == nil {
+		return
 	}
 
-	canceledOrder = ob.deleteOrderByID(orderID)
-	if canceledOrder != nil {
-		canceledOrder.Cancel()
-		delete(ob.OCO, orderID)
-		done.appendCanceled(canceledOrder)
+	if canceledOrder.IsStopOrder() {
+		ob.deleteStopOrderByID(orderID)
+		delete(ob.orders, orderID)
+	} else {
+		ob.deleteOrder(canceledOrder)
 	}
+
+	canceledOrder.Cancel()
+	delete(ob.OCO, orderID)
+	done.appendCanceled(canceledOrder)
 }
 
 // String implements fmt.Stringer interface
