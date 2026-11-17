@@ -29,6 +29,7 @@ Matchingo implements a standard price-time priority matching algorithm with supp
 - [Time in Force](#time-in-force)
 - [OCO Orders](#oco-orders)
 - [Stop-Limit Orders](#stop-limit-orders)
+- [Events](#events)
 - [Error Handling](#error-handling)
 - [Running Tests](#running-tests)
 - [Benchmark](#benchmark)
@@ -129,13 +130,22 @@ make example
 
 ### Decimal
 
-Matchingo uses a `Decimal` type built on [fpdecimal](https://github.com/nikolaydubina/fpdecimal) for precise price and quantity arithmetic.
+Matchingo uses a fixed-point `Decimal` type built on [fpdecimal](https://github.com/nikolaydubina/fpdecimal) for precise price and quantity arithmetic. **Never use `float64` literals directly for prices or quantities** — binary floating-point cannot represent values like `0.1` exactly, which causes silent rounding errors in financial arithmetic. Use integer or string constructors instead.
+
+The quickest way to create a Decimal from any Go numeric type or string is the generic helper `D`:
+
+```go
+matchingo.D(100)      // integer — exact
+matchingo.D("99.5")   // string  — preferred for fractional values
+matchingo.D(99.5)     // float64 — only use when the value is exactly representable
+```
 
 | Function | Description |
 |---|---|
+| `matchingo.D[T](v T)` | Generic helper: accepts int, float, or string; panics on bad string input |
 | `matchingo.FromInt(n int)` | Create a Decimal from an integer |
 | `matchingo.FromFloat(f float64)` | Create a Decimal from a float64 |
-| `matchingo.FromString(s string)` | Parse a Decimal from a string |
+| `matchingo.FromString(s string)` | Parse a Decimal from a string (returns error) |
 | `matchingo.FromIntScaled(n int64)` | Create a Decimal from a scaled integer |
 | `matchingo.Zero` | Zero value constant |
 
@@ -291,6 +301,19 @@ Returns `ErrInsufficientQuantity` if the order book cannot fully fill the reques
 
 An `OrderBook` instance can enforce maximum decimal-place limits on quantities and prices. Orders that exceed the limit are rejected by `Process` with a typed error — no panics, no silent truncation.
 
+Set precision at construction with options (preferred):
+
+```go
+ob := matchingo.NewOrderBook(matchingo.WithPrecision(2, 4))
+// or individually:
+ob := matchingo.NewOrderBook(
+    matchingo.WithQuantityPrecision(2),
+    matchingo.WithPricePrecision(4),
+)
+```
+
+Or on an existing book with setter methods:
+
 ```go
 ob := matchingo.NewOrderBook()
 ob.SetQuantityPrecision(2) // reject quantities with more than 2 decimal places
@@ -382,6 +405,42 @@ ob.Process(stopOrder)
 ```
 
 When the stop price is touched during matching, the order activates and enters the order book as a limit order. Activated order IDs appear in the `Done.Activated` slice.
+
+## Events
+
+The order book can push real-time events to any `EventEmitter`. Attach one at construction or via `SetEmitter`:
+
+```go
+// at construction (preferred)
+ob := matchingo.NewOrderBook(matchingo.WithEmitter(&myLogger{}))
+
+// or after construction
+ob.SetEmitter(&myLogger{})
+
+// built-in async channel emitter
+ch := make(chan matchingo.Event, 64)
+ob := matchingo.NewOrderBook(
+    matchingo.WithEmitter(matchingo.NewChannelEmitter(ch, true /* drop on full */)),
+)
+```
+
+Implement `EventEmitter` to receive events:
+
+```go
+type EventEmitter interface {
+    Emit(eventType EventType, data any)
+}
+```
+
+| Event type | Data type | Fired when |
+|---|---|---|
+| `EventTrade` | `TradeEventData` | A fill occurs |
+| `EventVolume` | `VolumeEventData` | Volume at a price level changes |
+| `EventCanceled` | `string` (order ID) | An order is canceled |
+| `EventActivated` | `string` (order ID) | A stop-limit order activates |
+| `EventBBO` | `BBOEventData` | Best bid or ask changes |
+
+`ChannelEmitter` also stamps each `Event.Sequence` with the book's monotonic counter. See [example 10](examples/10_event_emitter/main.go) and [example 12](examples/12_channel_emitter/main.go).
 
 ## Error Handling
 

@@ -8,7 +8,7 @@
 //   - Quantity decrease (same price)   → reduced in place, keeps time priority.
 //
 // Concepts shown:
-//   - ob.Cancel(id)
+//   - ob.CancelOrder(id)
 //   - ob.Modify(id, newPrice, newQty)
 //   - Time-priority implications of re-queuing
 package main
@@ -31,16 +31,16 @@ func main() {
 	// ------------------------------------------------------------------ //
 	// Cancel sell-A.                                                      //
 	// ------------------------------------------------------------------ //
-	ok := ob.Cancel("sell-A")
-	fmt.Printf("Cancel sell-A → found=%v\n", ok)
+	canceled := ob.CancelOrder("sell-A")
+	fmt.Printf("Cancel sell-A → found=%v\n", canceled != nil)
 	fmt.Println(ob) // only sell-B remains
 
 	// ------------------------------------------------------------------ //
 	// In-place quantity decrease on sell-B (same price, smaller qty).    //
 	// Keeps time priority — no re-queue.                                  //
 	// ------------------------------------------------------------------ //
-	done, ok := ob.Modify("sell-B", matchingo.FromInt(100), matchingo.FromInt(6))
-	fmt.Printf("\nModify sell-B qty → 6  (in-place)  done=%v  matched=%v\n", ok, done != nil)
+	done, err := ob.Modify("sell-B", matchingo.FromInt(100), matchingo.FromInt(6))
+	fmt.Printf("\nModify sell-B qty → 6  (in-place)  err=%v  matched=%v\n", err, done != nil)
 	fmt.Println(ob) // sell-B now shows 6 units at $100
 
 	// ------------------------------------------------------------------ //
@@ -51,8 +51,8 @@ func main() {
 	fmt.Println("\nBid at $98 resting:")
 	fmt.Println(ob)
 
-	done, ok = ob.Modify("sell-B", matchingo.FromInt(98), matchingo.FromInt(6))
-	fmt.Printf("\nModify sell-B price → $98  (re-queue + match)  ok=%v\n", ok)
+	done, err = ob.Modify("sell-B", matchingo.FromInt(98), matchingo.FromInt(6))
+	fmt.Printf("\nModify sell-B price → $98  (re-queue + match)  err=%v\n", err)
 	if done != nil {
 		fmt.Printf("  trades=%d  processed=%s  left=%s  stored=%v\n",
 			len(done.Trades)-1, done.Processed, done.Left, done.Stored)

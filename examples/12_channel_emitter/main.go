@@ -10,8 +10,9 @@
 // dropOnFull=false — Process() blocks until the channel has space (backpressure).
 //
 // Concepts shown:
-//   - ob.SetEventChannel(ch, dropOnFull)
-//   - Reading matchingo.Event{Type, Data} in a goroutine
+//   - matchingo.WithEmitter(matchingo.NewChannelEmitter(ch, dropOnFull)) constructor option
+//   - ob.SetEventChannel(ch, dropOnFull) for post-construction attachment
+//   - Reading matchingo.Event{Type, Data, Sequence} in a goroutine
 //   - Closing the channel after the book is done
 package main
 
@@ -23,10 +24,10 @@ import (
 )
 
 func main() {
-	ob := matchingo.NewOrderBook()
-
 	ch := make(chan matchingo.Event, 64)
-	ob.SetEventChannel(ch, true) // drop on full — Process() stays non-blocking
+	ob := matchingo.NewOrderBook(
+		matchingo.WithEmitter(matchingo.NewChannelEmitter(ch, true)), // drop on full — Process() stays non-blocking
+	)
 
 	var wg sync.WaitGroup
 	wg.Go(func() {
@@ -57,7 +58,7 @@ func main() {
 	ob.Process(matchingo.NewLimitOrder("buy-1", matchingo.Buy, matchingo.FromInt(3), matchingo.FromInt(100), matchingo.GTC, ""))
 
 	fmt.Println("\n=== canceling leftover sell ===")
-	ob.Cancel("sell-1")
+	ob.CancelOrder("sell-1")
 
 	// Detach emitter and close the channel to signal the consumer to stop.
 	ob.SetEmitter(nil)

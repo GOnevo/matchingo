@@ -86,7 +86,7 @@ func TestEvent_VolumeAfterCancel(t *testing.T) {
 	ob.Process(matchingo.NewLimitOrder("sell-1", matchingo.Sell, matchingo.FromInt(10), matchingo.FromInt(100), "", ""))
 	em.events = nil
 
-	ob.Cancel("sell-1")
+	ob.CancelOrder("sell-1")
 
 	vols := em.eventsOf(matchingo.EventVolume)
 	if len(vols) == 0 {
@@ -135,7 +135,7 @@ func TestEvent_CanceledEvent(t *testing.T) {
 	ob.Process(matchingo.NewLimitOrder("buy-1", matchingo.Buy, matchingo.FromInt(5), matchingo.FromInt(100), "", ""))
 	em.events = nil
 
-	ob.Cancel("buy-1")
+	ob.CancelOrder("buy-1")
 
 	canceled := em.eventsOf(matchingo.EventCanceled)
 	if len(canceled) == 0 {
@@ -200,7 +200,7 @@ func TestEvent_BBOEvent(t *testing.T) {
 	em.events = nil
 
 	// Cancel the sell — BBO ask changes back to nil.
-	ob.Cancel("sell-1")
+	ob.CancelOrder("sell-1")
 	bbos = em.eventsOf(matchingo.EventBBO)
 	if len(bbos) == 0 {
 		t.Fatal("expected BBO event after cancel, got none")
@@ -230,7 +230,7 @@ func TestEvent_NoBBOWhenUnchanged(t *testing.T) {
 	em.events = nil
 
 	// Cancel sell-2 (110) — BBO ask is still sell-1 at 100, no change.
-	ob.Cancel("sell-2")
+	ob.CancelOrder("sell-2")
 	bbos := em.eventsOf(matchingo.EventBBO)
 	if len(bbos) != 0 {
 		t.Errorf("expected no BBO event when BBO unchanged, got %d", len(bbos))
@@ -244,7 +244,7 @@ func TestEvent_NoEventsWhenDisabled(t *testing.T) {
 	ob.Process(matchingo.NewLimitOrder("sell-1", matchingo.Sell, matchingo.FromInt(5), matchingo.FromInt(100), "", ""))
 	ob.Process(matchingo.NewLimitOrder("buy-1", matchingo.Buy, matchingo.FromInt(5), matchingo.FromInt(100), "", ""))
 	ob.Process(matchingo.NewLimitOrder("sell-2", matchingo.Sell, matchingo.FromInt(5), matchingo.FromInt(110), "", ""))
-	ob.Cancel("sell-2")
+	ob.CancelOrder("sell-2")
 	ob.Depth()
 	// If we reach here without panic, the nil-emitter guard works.
 }

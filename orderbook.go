@@ -26,14 +26,44 @@ type OrderBook struct {
 func (ob *OrderBook) Sequence() uint64 { return ob.sequence }
 
 // NewOrderBook creates Orderbook object
-func NewOrderBook() *OrderBook {
-	return &OrderBook{
+// Option configures an OrderBook at construction time.
+type Option func(*OrderBook)
+
+// WithQuantityPrecision sets the maximum decimal places allowed for quantities.
+func WithQuantityPrecision(decimals int) Option {
+	return func(ob *OrderBook) { ob.quantityPrecision = decimals }
+}
+
+// WithPricePrecision sets the maximum decimal places allowed for prices.
+func WithPricePrecision(decimals int) Option {
+	return func(ob *OrderBook) { ob.pricePrecision = decimals }
+}
+
+// WithEmitter sets the event emitter at construction time.
+func WithEmitter(e EventEmitter) Option {
+	return func(ob *OrderBook) { ob.emitter = e }
+}
+
+// WithPrecision sets both quantity and price precision in one call.
+func WithPrecision(quantityDecimals, priceDecimals int) Option {
+	return func(ob *OrderBook) {
+		ob.quantityPrecision = quantityDecimals
+		ob.pricePrecision = priceDecimals
+	}
+}
+
+func NewOrderBook(opts ...Option) *OrderBook {
+	ob := &OrderBook{
 		orders: map[string]*Order{},
 		bids:   NewOrderSideBid(),
 		asks:   NewOrderSideAsk(),
 		Stop:   NewStopBook(),
 		OCO:    map[string]struct{}{},
 	}
+	for _, o := range opts {
+		o(ob)
+	}
+	return ob
 }
 
 // SetQuantityPrecision sets the maximum number of decimal places allowed for order quantities.
@@ -100,22 +130,17 @@ func (ob *OrderBook) CancelOrder(orderID string) *Order {
 	return order
 }
 
-// Cancel removes the order with the given ID and returns true on success, false if not found.
-func (ob *OrderBook) Cancel(orderID string) bool {
-	return ob.CancelOrder(orderID) != nil
-}
-
 // Modify changes the price or quantity of a resting limit order.
 // Returns false if the order is not found or is a stop-limit order.
 // In-place decrease: same price and newQty ≤ current open → keep time priority.
 // Re-queue: price change or quantity increase → remove and re-insert at back of new price level, then match.
-func (ob *OrderBook) Modify(orderID string, newPrice, newQty Decimal) (*Done, bool) {
+func (ob *OrderBook) Modify(orderID string, newPrice, newQty Decimal) (*Done, error) {
 	order := ob.GetOrder(orderID)
 	if order == nil {
-		return nil, false
+		return nil, ErrOrderNotFound
 	}
 	if order.IsStopOrder() {
-		return nil, false
+		return nil, ErrNotLimitOrder
 	}
 
 	var prevBid, prevAsk Decimal
@@ -135,7 +160,7 @@ func (ob *OrderBook) Modify(orderID string, newPrice, newQty Decimal) (*Done, bo
 			ob.emit(EventVolume, VolumeEventData{Side: order.Side(), Price: order.price, Volume: side_.VolumeAt(order.price)})
 		}
 		ob.emitBBOIfChanged(prevBid, prevAsk)
-		return nil, true
+		return nil, nil
 	}
 
 	// Re-queue path: remove and re-submit as a fresh limit order at the back of the new level.
@@ -147,16 +172,19 @@ func (ob *OrderBook) Modify(orderID string, newPrice, newQty Decimal) (*Done, bo
 
 	done, _ := ob.processLimitOrder(order)
 	ob.emitBBOIfChanged(prevBid, prevAsk)
-	return done, true
+	return done, nil
 }
 
 // ModifyStop changes the stop price, limit price, and/or quantity of a resting stop-limit order.
 // Returns false if the order is not found or is not a stop-limit order.
 // The order is removed from the stop book and re-inserted at the back of the new stop price bucket.
-func (ob *OrderBook) ModifyStop(orderID string, newStopPrice, newLimitPrice, newQty Decimal) bool {
+func (ob *OrderBook) ModifyStop(orderID string, newStopPrice, newLimitPrice, newQty Decimal) error {
 	order := ob.GetOrder(orderID)
-	if order == nil || !order.IsStopOrder() {
-		return false
+	if order == nil {
+		return ErrOrderNotFound
+	}
+	if !order.IsStopOrder() {
+		return ErrNotStopOrder
 	}
 	ob.Stop.Remove(order)
 	order.stop = newStopPrice
@@ -164,7 +192,7 @@ func (ob *OrderBook) ModifyStop(orderID string, newStopPrice, newLimitPrice, new
 	order.SetQuantity(newQty)
 	order.originalQty = newQty
 	ob.Stop.Append(order)
-	return true
+	return nil
 }
 
 // Process public method
@@ -182,13 +210,13 @@ func (ob *OrderBook) Process(order *Order) (done *Done, err error) {
 		return nil, ErrInvalidQuantity
 	}
 	if !checkPrecision(order.Quantity(), ob.quantityPrecision) {
-		return nil, ErrQuantityPrecision
+		return nil, errQuantityPrecision(order.Quantity(), ob.quantityPrecision)
 	}
 	if !order.IsMarketOrder() && !checkPrecision(order.Price(), ob.pricePrecision) {
-		return nil, ErrPricePrecision
+		return nil, errPricePrecision(order.Price(), ob.pricePrecision)
 	}
 	if !order.IsMarketOrder() && order.IsStopOrder() && !checkPrecision(order.StopPrice(), ob.pricePrecision) {
-		return nil, ErrPricePrecision
+		return nil, errPricePrecision(order.StopPrice(), ob.pricePrecision)
 	}
 	if ob.GetOrder(order.ID()) != nil {
 		return nil, ErrOrderExists
@@ -603,7 +631,7 @@ func (ob *OrderBook) BestAsk() *Level {
 }
 
 // Level returns the total open amount at the given price on the given side, or nil if none.
-func (ob *OrderBook) Level(side Side, price Decimal) *Decimal {
+func (ob *OrderBook) Level(side Side, price Decimal) (Decimal, bool) {
 	var side_ *OrderSide
 	if side == Buy {
 		side_ = ob.bids
@@ -613,12 +641,10 @@ func (ob *OrderBook) Level(side Side, price Decimal) *Decimal {
 	prices := side_.Prices()
 	for _, p := range prices {
 		if p.Equal(price) {
-			q := side_.prices[p]
-			v := q.Volume()
-			return &v
+			return side_.prices[p].Volume(), true
 		}
 	}
-	return nil
+	return Zero, false
 }
 
 // String implements fmt.Stringer interface

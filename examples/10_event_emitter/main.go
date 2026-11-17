@@ -13,7 +13,8 @@
 //
 // Concepts shown:
 //   - Implementing matchingo.EventEmitter
-//   - ob.SetEmitter(e)
+//   - matchingo.WithEmitter(e) constructor option
+//   - ob.SetEmitter(e) for post-construction attachment
 //   - Receiving typed event data via type-switch
 package main
 
@@ -50,8 +51,7 @@ func (l *logger) Emit(eventType matchingo.EventType, data any) {
 }
 
 func main() {
-	ob := matchingo.NewOrderBook()
-	ob.SetEmitter(&logger{})
+	ob := matchingo.NewOrderBook(matchingo.WithEmitter(&logger{}))
 
 	fmt.Println("=== placing resting sell ===")
 	ob.Process(matchingo.NewLimitOrder("sell-1", matchingo.Sell, matchingo.FromInt(5), matchingo.FromInt(100), matchingo.GTC, ""))
@@ -60,7 +60,7 @@ func main() {
 	ob.Process(matchingo.NewLimitOrder("buy-1", matchingo.Buy, matchingo.FromInt(3), matchingo.FromInt(100), matchingo.GTC, ""))
 
 	fmt.Println("\n=== canceling leftover sell ===")
-	ob.Cancel("sell-1")
+	ob.CancelOrder("sell-1")
 
 	fmt.Println("\n=== requesting depth (triggers EventDepth) ===")
 	ob.Depth()

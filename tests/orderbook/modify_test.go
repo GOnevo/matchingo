@@ -6,22 +6,22 @@ import (
 	"github.com/gonevo/matchingo"
 )
 
-// §18.11: Modify unknown ID returns false.
+// §18.11: Modify unknown ID returns error.
 func TestModify_UnknownID(t *testing.T) {
 	ob := newOB()
-	_, ok := ob.Modify("nonexistent", d("100"), d("5"))
-	if ok {
-		t.Fatal("Modify unknown ID should return false")
+	_, err := ob.Modify("nonexistent", d("100"), d("5"))
+	if err == nil {
+		t.Fatal("Modify unknown ID should return error")
 	}
 }
 
-// §18.11: Modify a STOP-LIMIT order returns false.
-func TestModify_StopLimitReturnsFalse(t *testing.T) {
+// §18.11: Modify a STOP-LIMIT order returns error.
+func TestModify_StopLimitReturnsError(t *testing.T) {
 	ob := newOB()
 	ob.Process(matchingo.NewStopLimitOrder("stop1", matchingo.Buy, d("5"), d("105"), d("90"), ""))
-	_, ok := ob.Modify("stop1", d("105"), d("3"))
-	if ok {
-		t.Fatal("Modify stop-limit should return false")
+	_, err := ob.Modify("stop1", d("105"), d("3"))
+	if err == nil {
+		t.Fatal("Modify stop-limit should return error")
 	}
 }
 
@@ -32,8 +32,8 @@ func TestModify_InPlaceDecreasKeepsTimePriority(t *testing.T) {
 	ob.Process(matchingo.NewLimitOrder("bid2", matchingo.Buy, d("10"), d("100"), matchingo.GTC, ""))
 
 	// decrease bid1 in place
-	_, ok := ob.Modify("bid1", d("100"), d("5"))
-	if !ok {
+	_, err := ob.Modify("bid1", d("100"), d("5"))
+	if err != nil {
 		t.Fatal("in-place decrease should succeed")
 	}
 
@@ -55,8 +55,8 @@ func TestModify_InPlaceDecreaseUpdatesVolume(t *testing.T) {
 	ob := newOB()
 	ob.Process(matchingo.NewLimitOrder("bid1", matchingo.Buy, d("10"), d("100"), matchingo.GTC, ""))
 
-	_, ok := ob.Modify("bid1", d("100"), d("4"))
-	if !ok {
+	_, err := ob.Modify("bid1", d("100"), d("4"))
+	if err != nil {
 		t.Fatal("in-place decrease should succeed")
 	}
 
@@ -64,8 +64,8 @@ func TestModify_InPlaceDecreaseUpdatesVolume(t *testing.T) {
 	if !o.Quantity().Equal(d("4")) {
 		t.Fatalf("open amount should be 4, got %s", o.Quantity())
 	}
-	v := ob.Level(matchingo.Buy, d("100"))
-	if v == nil || !v.Equal(d("4")) {
+	v, ok := ob.Level(matchingo.Buy, d("100"))
+	if !ok || !v.Equal(d("4")) {
 		t.Fatalf("volume at 100 should be 4, got %v", v)
 	}
 }
@@ -77,8 +77,8 @@ func TestModify_PriceChangeLosesTimePriority(t *testing.T) {
 	ob.Process(matchingo.NewLimitOrder("bid2", matchingo.Buy, d("5"), d("101"), matchingo.GTC, ""))
 
 	// change bid2 price to 100 — it should go to back of 100 level
-	_, ok := ob.Modify("bid2", d("100"), d("5"))
-	if !ok {
+	_, err := ob.Modify("bid2", d("100"), d("5"))
+	if err != nil {
 		t.Fatal("price change modify should succeed")
 	}
 
@@ -102,8 +102,8 @@ func TestModify_AmountIncreaseLosesTimePriority(t *testing.T) {
 	ob.Process(matchingo.NewLimitOrder("bid2", matchingo.Buy, d("5"), d("100"), matchingo.GTC, ""))
 
 	// increase bid1 amount — it should go to back of 100 level
-	_, ok := ob.Modify("bid1", d("100"), d("8"))
-	if !ok {
+	_, err := ob.Modify("bid1", d("100"), d("8"))
+	if err != nil {
 		t.Fatal("amount increase modify should succeed")
 	}
 
@@ -124,8 +124,8 @@ func TestModify_RequeueMatchesImmediately(t *testing.T) {
 	ob.Process(matchingo.NewLimitOrder("ask1", matchingo.Sell, d("5"), d("105"), matchingo.GTC, ""))
 
 	// change ask1 price to 100 — it now crosses bid1 and should match immediately
-	done, ok := ob.Modify("ask1", d("100"), d("5"))
-	if !ok {
+	done, err := ob.Modify("ask1", d("100"), d("5"))
+	if err != nil {
 		t.Fatal("modify should succeed")
 	}
 	if done == nil || len(done.Trades) == 0 {
@@ -138,9 +138,8 @@ func TestModifyStop_ChangesStopPrice(t *testing.T) {
 	ob := newOB()
 	ob.Process(matchingo.NewStopLimitOrder("stop-1", matchingo.Buy, d("5"), d("100"), d("95"), ""))
 
-	ok := ob.ModifyStop("stop-1", d("90"), d("100"), d("5"))
-	if !ok {
-		t.Fatal("ModifyStop should return true for a known stop order")
+	if err := ob.ModifyStop("stop-1", d("90"), d("100"), d("5")); err != nil {
+		t.Fatalf("ModifyStop should succeed for a known stop order: %v", err)
 	}
 
 	// Trade at 89: below new stop (90), should NOT activate.
@@ -158,11 +157,11 @@ func TestModifyStop_ChangesStopPrice(t *testing.T) {
 	}
 }
 
-// ModifyStop returns false for a limit order.
-func TestModifyStop_ReturnsFalseForNonStop(t *testing.T) {
+// ModifyStop returns error for a limit order.
+func TestModifyStop_ReturnsErrorForNonStop(t *testing.T) {
 	ob := newOB()
 	ob.Process(matchingo.NewLimitOrder("lim-1", matchingo.Buy, d("5"), d("100"), matchingo.GTC, ""))
-	if ob.ModifyStop("lim-1", d("90"), d("100"), d("5")) {
-		t.Fatal("ModifyStop should return false for a limit order")
+	if err := ob.ModifyStop("lim-1", d("90"), d("100"), d("5")); err == nil {
+		t.Fatal("ModifyStop should return error for a limit order")
 	}
 }

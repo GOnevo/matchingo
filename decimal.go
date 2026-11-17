@@ -111,3 +111,52 @@ func FromString(s string) (Decimal, error) {
 func FromIntScaled(num int64) Decimal {
 	return Decimal{fpdecimal.FromIntScaled(num)}
 }
+
+// Numeric is the set of Go types that D accepts.
+type Numeric interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64 |
+		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 |
+		~float32 | ~float64 | ~string
+}
+
+// D converts any numeric literal or string to a Decimal.
+//
+//	D(100)       // integer
+//	D(99.5)      // float — exact only when representable at the book's precision
+//	D("99.5")    // string — preferred for fractional values; panics on parse error
+func D[T Numeric](v T) Decimal {
+	switch val := any(v).(type) {
+	case int:
+		return FromInt(val)
+	case int8:
+		return FromInt(int(val))
+	case int16:
+		return FromInt(int(val))
+	case int32:
+		return FromInt(int(val))
+	case int64:
+		return FromInt(int(val))
+	case uint:
+		return FromInt(int(val))
+	case uint8:
+		return FromInt(int(val))
+	case uint16:
+		return FromInt(int(val))
+	case uint32:
+		return FromInt(int(val))
+	case uint64:
+		return FromInt(int(val))
+	case float32:
+		return FromFloat(float64(val))
+	case float64:
+		return FromFloat(val)
+	case string:
+		d, err := FromString(val)
+		if err != nil {
+			panic(fmt.Sprintf("matchingo.D: cannot parse %q: %v", val, err))
+		}
+		return d
+	default:
+		panic(fmt.Sprintf("matchingo.D: unsupported type %T", v))
+	}
+}
