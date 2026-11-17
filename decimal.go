@@ -24,11 +24,6 @@ func FromFloat(num float64) Decimal {
 	return Decimal{fpdecimal.FromFloat(num)}
 }
 
-// SetDecimalFraction set precision
-func SetDecimalFraction(precision int) {
-	fpdecimal.FractionDigits = uint8(precision)
-}
-
 // LessThanOrEqual returns true if d <= other
 func (d Decimal) LessThanOrEqual(other Decimal) bool {
 	return d.Decimal.LessThanOrEqual(other.Decimal)

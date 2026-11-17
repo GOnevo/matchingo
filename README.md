@@ -13,6 +13,7 @@ Matchingo implements a standard price-time priority matching algorithm with supp
 
 - [Features](#features)
 - [Installation](#installation)
+- [Examples](#examples)
 - [Quick Start](#quick-start)
 - [API Reference](#api-reference)
   - [Decimal](#decimal)
@@ -23,6 +24,7 @@ Matchingo implements a standard price-time priority matching algorithm with supp
   - [Canceling Orders](#canceling-orders)
   - [Order Book Depth](#order-book-depth)
   - [Market Price Calculation](#market-price-calculation)
+  - [Precision Limits](#precision-limits)
 - [Order Quantity & Quote Mode](#order-quantity--quote-mode)
 - [Time in Force](#time-in-force)
 - [OCO Orders](#oco-orders)
@@ -49,6 +51,33 @@ Matchingo implements a standard price-time priority matching algorithm with supp
 go get github.com/gonevo/matchingo
 ```
 
+## Examples
+
+The [`examples/`](examples/) directory contains ten runnable examples, one per
+concept, each with inline explanations:
+
+| # | Topic | File |
+|---|-------|------|
+| 01 | Basic limit orders | [examples/01_basic_limit_orders/](examples/01_basic_limit_orders/main.go) |
+| 02 | Market & quote-market orders | [examples/02_market_orders/](examples/02_market_orders/main.go) |
+| 03 | Time-in-force (GTC / IOC / FOK) | [examples/03_time_in_force/](examples/03_time_in_force/main.go) |
+| 04 | Cancel and modify | [examples/04_cancel_and_modify/](examples/04_cancel_and_modify/main.go) |
+| 05 | Stop-limit orders | [examples/05_stop_limit_orders/](examples/05_stop_limit_orders/main.go) |
+| 06 | OCO (One-Cancels-Other) | [examples/06_oco_orders/](examples/06_oco_orders/main.go) |
+| 07 | Iceberg orders | [examples/07_iceberg_orders/](examples/07_iceberg_orders/main.go) |
+| 08 | Post-only orders | [examples/08_post_only_orders/](examples/08_post_only_orders/main.go) |
+| 09 | Snapshot (dump & restore) | [examples/09_snapshot/](examples/09_snapshot/main.go) |
+| 10 | Event emitter | [examples/10_event_emitter/](examples/10_event_emitter/main.go) |
+| 11 | Precision limits | [examples/11_precision_limits/](examples/11_precision_limits/main.go) |
+
+Run any example with:
+
+```shell
+go run ./examples/01_basic_limit_orders/
+```
+
+See [examples/README.md](examples/README.md) for a full description of each.
+
 ## Quick Start
 
 ```go
@@ -61,7 +90,6 @@ import (
 )
 
 func main() {
-	matchingo.SetDecimalFraction(5) // set decimal precision (default: 3)
 	ob := matchingo.NewOrderBook()
 
 	// Place a limit sell order: 10 units at price 10
@@ -107,7 +135,6 @@ Matchingo uses a `Decimal` type built on [fpdecimal](https://github.com/nikolayd
 | `matchingo.FromFloat(f float64)` | Create a Decimal from a float64 |
 | `matchingo.FromString(s string)` | Parse a Decimal from a string |
 | `matchingo.FromIntScaled(n int64)` | Create a Decimal from a scaled integer |
-| `matchingo.SetDecimalFraction(precision int)` | Set global decimal precision (default: 3) |
 | `matchingo.Zero` | Zero value constant |
 
 Decimal supports arithmetic operations: `Add`, `Sub`, `Mul`, `Div`, and comparisons: `Equal`, `LessThan`, `LessThanOrEqual`, `GreaterThan`, `GreaterThanOrEqual`, `Compare`.
@@ -258,6 +285,33 @@ price, err := ob.CalculateMarketPrice(matchingo.Buy, matchingo.FromInt(100))
 
 Returns `ErrInsufficientQuantity` if the order book cannot fully fill the requested quantity.
 
+## Precision Limits
+
+An `OrderBook` instance can enforce maximum decimal-place limits on quantities and prices. Orders that exceed the limit are rejected by `Process` with a typed error — no panics, no silent truncation.
+
+```go
+ob := matchingo.NewOrderBook()
+ob.SetQuantityPrecision(2) // reject quantities with more than 2 decimal places
+ob.SetPricePrecision(4)    // reject prices with more than 4 decimal places
+
+// accepted: quantity 1.25, price 10.1234
+done, err := ob.Process(matchingo.NewLimitOrder(
+    "order1", matchingo.Buy,
+    matchingo.FromFloat(1.25), matchingo.FromFloat(10.1234),
+    "", "",
+))
+
+// rejected: quantity 1.251 has 3 decimal places → ErrQuantityPrecision
+_, err = ob.Process(matchingo.NewLimitOrder(
+    "order2", matchingo.Buy,
+    matchingo.FromFloat(1.251), matchingo.FromFloat(10.1234),
+    "", "",
+))
+// err == matchingo.ErrQuantityPrecision
+```
+
+A precision of `0` (the default) means no limit. The check applies to the quantity and limit/stop price of every order type.
+
 ## Order Quantity & Quote Mode
 
 Each trading symbol combines a **BASE** and a **QUOTE** currency (e.g., `BTC/USD` where `BTC` is "base" and `USD` is "quote").
@@ -341,6 +395,8 @@ When the stop price is touched during matching, the order activates and enters t
 | `ErrInvalidTif` | TIF value is not GTC, FOK, or IOC |
 | `ErrOrderExists` | An order with the same ID already exists |
 | `ErrInsufficientQuantity` | Not enough volume to calculate market price |
+| `ErrQuantityPrecision` | Quantity has more decimal places than allowed by `SetQuantityPrecision` |
+| `ErrPricePrecision` | Price has more decimal places than allowed by `SetPricePrecision` |
 
 Order constructors (`NewMarketOrder`, `NewLimitOrder`, `NewStopLimitOrder`) panic on invalid quantity or price.
 

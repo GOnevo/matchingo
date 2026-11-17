@@ -17,11 +17,9 @@ func TestDecimal_FromFloat(t *testing.T) {
 	}
 }
 
-func TestDecimal_SetDecimalFraction(t *testing.T) {
-	matchingo.SetDecimalFraction(4)
+func TestDecimal_FromFloat_Precision(t *testing.T) {
 	d := matchingo.FromFloat(1.23456)
 	if d.String() == "" {
-		t.Fatal("SetDecimalFraction should not break FromFloat")
+		t.Fatal("FromFloat should return a non-empty decimal")
 	}
-	matchingo.SetDecimalFraction(2)
 }

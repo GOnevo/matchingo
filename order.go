@@ -55,6 +55,9 @@ type Order struct {
 	stop        Decimal
 	tif         TIF
 	oco         string
+	peakQty     Decimal
+	hiddenQty   Decimal
+	postOnly    bool
 }
 
 // NewMarketOrder creates new constant object Order
@@ -146,6 +149,89 @@ func NewStopLimitOrder(orderID string, side Side, quantity, price, stop Decimal,
 	}
 }
 
+// NewPostOnlyOrder creates a new post-only LIMIT order
+func NewPostOnlyOrder(orderID string, side Side, qty, price Decimal, tif TIF, oco string) *Order {
+
+	if qty.LessThanOrEqual(Zero) {
+		panic(ErrInvalidQuantity)
+	}
+
+	if price.LessThanOrEqual(Zero) {
+		panic(ErrInvalidPrice)
+	}
+
+	if tif != "" && tif != GTC && tif != FOK && tif != IOC {
+		panic(ErrInvalidTif)
+	}
+
+	return &Order{
+		id:          orderID,
+		orderType:   TypeLimit,
+		side:        side,
+		quantity:    qty,
+		originalQty: qty,
+		price:       price,
+		canceled:    false,
+		oco:         oco,
+		tif:         tif,
+		postOnly:    true,
+	}
+}
+
+// IsPostOnly returns true if this is a post-only order
+func (o *Order) IsPostOnly() bool {
+	return o.postOnly
+}
+
+// NewIcebergOrder creates a new iceberg LIMIT order
+func NewIcebergOrder(orderID string, side Side, totalQty, peakQty, price Decimal, tif TIF, oco string) *Order {
+
+	if totalQty.LessThanOrEqual(Zero) {
+		panic(ErrInvalidQuantity)
+	}
+
+	if price.LessThanOrEqual(Zero) {
+		panic(ErrInvalidPrice)
+	}
+
+	if peakQty.GreaterThanOrEqual(totalQty) {
+		panic(ErrInvalidQuantity)
+	}
+
+	if tif != "" && tif != GTC && tif != FOK && tif != IOC {
+		panic(ErrInvalidTif)
+	}
+
+	return &Order{
+		id:          orderID,
+		orderType:   TypeLimit,
+		side:        side,
+		quantity:    peakQty,
+		originalQty: totalQty,
+		price:       price,
+		canceled:    false,
+		oco:         oco,
+		tif:         tif,
+		peakQty:     peakQty,
+		hiddenQty:   totalQty.Sub(peakQty),
+	}
+}
+
+// IsIceberg returns true if this is an iceberg order
+func (o *Order) IsIceberg() bool {
+	return o.peakQty.GreaterThan(Zero)
+}
+
+// PeakQty returns the peak quantity of an iceberg order
+func (o *Order) PeakQty() Decimal {
+	return o.peakQty
+}
+
+// HiddenQty returns the remaining hidden quantity of an iceberg order
+func (o *Order) HiddenQty() Decimal {
+	return o.hiddenQty
+}
+
 // ID returns OrderID field copy
 func (o *Order) ID() string {
 	return o.id
@@ -199,6 +285,11 @@ func (o *Order) OCO() string {
 // TIF returns tif field
 func (o *Order) TIF() TIF {
 	return o.tif
+}
+
+// SetTIF sets the time-in-force for stop-limit orders before they activate.
+func (o *Order) SetTIF(tif TIF) {
+	o.tif = tif
 }
 
 // IsCanceled returns Canceled status

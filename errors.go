@@ -12,4 +12,6 @@ var (
 	ErrInvalidTif           = errors.New("orderbook: invalid GetOrder time in force")
 	ErrOrderExists          = errors.New("orderbook: GetOrder already exists")
 	ErrInsufficientQuantity = errors.New("orderbook: insufficient Volume to calculate Price")
+	ErrQuantityPrecision    = errors.New("orderbook: quantity exceeds allowed precision")
+	ErrPricePrecision       = errors.New("orderbook: price exceeds allowed precision")
 )

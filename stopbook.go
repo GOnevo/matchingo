@@ -2,6 +2,7 @@ package matchingo
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -44,25 +45,54 @@ func (sb *StopBook) Append(o *Order) {
 	sb.numOrders++
 }
 
-// Activate Orders by Stop Price
-func (sb *StopBook) Activate(price Decimal) []Order {
-
-	priceQueue, ok := sb.prices[price]
-	if !ok {
+// Activate activates stop orders triggered by a trade at price on the given side.
+// BUY stops activate when stop price ≤ trade price (lowest first).
+// SELL stops activate when stop price ≥ trade price (highest first).
+// Within the same stop price, insertion order is preserved.
+func (sb *StopBook) Activate(price Decimal, side Side) []Order {
+	var keys []Decimal
+	for p := range sb.prices {
+		if side == Buy && p.LessThanOrEqual(price) {
+			keys = append(keys, p)
+		} else if side == Sell && p.GreaterThanOrEqual(price) {
+			keys = append(keys, p)
+		}
+	}
+	if len(keys) == 0 {
 		return nil
 	}
+	sort.Slice(keys, func(i, j int) bool {
+		if side == Buy {
+			return keys[i].LessThan(keys[j])
+		}
+		return keys[i].GreaterThan(keys[j])
+	})
 
-	slice := priceQueue.Slice()
-	for _, order := range slice {
-		delete(sb.orders, order.ID())
+	var result []Order
+	for _, p := range keys {
+		queue := sb.prices[p]
+		n := queue.Len()
+		kept := make([]*Order, 0, n)
+		for i := 0; i < n; i++ {
+			o := queue.Orders.PopFront()
+			if o.Side() == side {
+				result = append(result, *o)
+				delete(sb.orders, o.ID())
+				sb.numOrders--
+			} else {
+				kept = append(kept, o)
+			}
+		}
+		queue.volume = Zero
+		for _, o := range kept {
+			queue.Orders.PushBack(o)
+			queue.volume = queue.volume.Add(o.Quantity())
+		}
+		if queue.Len() == 0 {
+			delete(sb.prices, p)
+		}
 	}
-
-	if priceQueue.Len() == 0 {
-		delete(sb.prices, price)
-	}
-
-	sb.numOrders = sb.numOrders - len(slice)
-	return slice
+	return result
 }
 
 // Remove removes Order from definite Price level

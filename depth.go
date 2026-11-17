@@ -35,6 +35,8 @@ func (ob *OrderBook) Depth() *Depth {
 		depth.Bid[level.Price().String()] = level.Volume().String()
 		level = ob.bids.NextLevel(level.Price())
 	}
+
+	ob.emit(EventDepth, depth)
 	return depth
 }
 

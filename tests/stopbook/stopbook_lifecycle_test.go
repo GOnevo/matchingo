@@ -17,7 +17,7 @@ func TestStopBook_ReleasesIDsAfterRemovalAndActivation(t *testing.T) {
 				if book.Remove(original) != original {
 					t.Fatal("Remove did not return the original order")
 				}
-			} else if orders := book.Activate(matchingo.FromInt(10)); len(orders) != 1 || orders[0].ID() != original.ID() {
+			} else if orders := book.Activate(matchingo.FromInt(10), matchingo.Buy); len(orders) != 1 || orders[0].ID() != original.ID() {
 				t.Fatalf("unexpected activated orders: %v", orders)
 			}
 			if book.Len() != 0 {
@@ -48,7 +48,7 @@ func TestStopBook_CannotRemoveReleasedIDTwice(t *testing.T) {
 			if operation == "remove" {
 				book.Remove(order)
 			} else {
-				book.Activate(matchingo.FromInt(11))
+				book.Activate(matchingo.FromInt(11), matchingo.Sell)
 			}
 			if removed := book.RemoveByID("stop"); removed != nil {
 				t.Fatalf("removed a stale order: %v", removed)

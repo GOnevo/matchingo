@@ -6,25 +6,28 @@ import (
 
 // Done structure
 type Done struct {
-	Order     *Order
-	Trades    []TradeOrder
-	Canceled  []string
-	Activated []string
-	Stored    bool
-	Quantity  Decimal
-	Left      Decimal
-	Processed Decimal
+	Order            *Order
+	Trades           []TradeOrder
+	Canceled         []string
+	Activated        []string
+	Activations      []*Done
+	Stored           bool
+	Quantity         Decimal
+	Left             Decimal
+	Processed        Decimal
+	pendingActivated []*Order
 }
 
 // DoneJSON structure
 type DoneJSON struct {
-	Order     *TradeOrder  `json:"order"`
-	Trades    []TradeOrder `json:"trades"`
-	Canceled  []string     `json:"canceled"`
-	Activated []string     `json:"activated"`
-	Left      string       `json:"left"`
-	Processed string       `json:"processed"`
-	Stored    bool         `json:"stored"`
+	Order       *TradeOrder  `json:"order"`
+	Trades      []TradeOrder `json:"trades"`
+	Canceled    []string     `json:"canceled"`
+	Activated   []string     `json:"activated"`
+	Activations []*Done      `json:"activations"`
+	Left        string       `json:"left"`
+	Processed   string       `json:"processed"`
+	Stored      bool         `json:"stored"`
 }
 
 func newDone(order *Order) *Done {
@@ -71,6 +74,16 @@ func (d *Done) appendActivated(order *Order) {
 	d.Activated = append(d.Activated, order.ID())
 }
 
+func (d *Done) addPendingActivated(orders ...*Order) {
+	d.pendingActivated = append(d.pendingActivated, orders...)
+}
+
+func (d *Done) drainPendingActivated() []*Order {
+	pending := d.pendingActivated
+	d.pendingActivated = nil
+	return pending
+}
+
 func (d *Done) setLeftQuantity(quantity *Decimal) {
 	if len(d.Trades) == 0 && !d.Order.IsMarketOrder() {
 		return
@@ -85,21 +98,23 @@ func (d *Done) setLeftQuantity(quantity *Decimal) {
 // MarshalJSON implements Marshaler interface
 func (d *Done) MarshalJSON() ([]byte, error) {
 	customStruct := struct {
-		Order     *TradeOrder  `json:"order"`
-		Trades    []TradeOrder `json:"trades"`
-		Canceled  []string     `json:"canceled"`
-		Activated []string     `json:"activated"`
-		Left      string       `json:"left"`
-		Processed string       `json:"processed"`
-		Stored    bool         `json:"stored"`
+		Order       *TradeOrder  `json:"order"`
+		Trades      []TradeOrder `json:"trades"`
+		Canceled    []string     `json:"canceled"`
+		Activated   []string     `json:"activated"`
+		Activations []*Done      `json:"activations"`
+		Left        string       `json:"left"`
+		Processed   string       `json:"processed"`
+		Stored      bool         `json:"stored"`
 	}{
-		Order:     d.Order.ToSimple(),
-		Trades:    d.tradesToSlice(),
-		Canceled:  d.Canceled,
-		Activated: d.Activated,
-		Left:      d.Left.String(),
-		Processed: d.Processed.String(),
-		Stored:    d.Stored,
+		Order:       d.Order.ToSimple(),
+		Trades:      d.tradesToSlice(),
+		Canceled:    d.Canceled,
+		Activated:   d.Activated,
+		Activations: d.Activations,
+		Left:        d.Left.String(),
+		Processed:   d.Processed.String(),
+		Stored:      d.Stored,
 	}
 	return json.Marshal(customStruct)
 }

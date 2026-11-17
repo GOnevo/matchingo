@@ -85,6 +85,17 @@ func (os *OrderSide) Remove(order *Order) *Order {
 	return order
 }
 
+// DecreaseOrderQty decreases a resting order's quantity in-place, preserving time priority.
+func (os *OrderSide) DecreaseOrderQty(order *Order, newQty Decimal) {
+	priceQueue := os.prices[order.Price()]
+	if priceQueue == nil {
+		return
+	}
+	delta := order.quantity.Sub(newQty)
+	priceQueue.UpdateVolume(delta)
+	order.SetQuantity(newQty)
+}
+
 // Prices returns slice of prices
 func (os *OrderSide) Prices() []Decimal {
 	return os.orderedPrices.Slice()
@@ -139,6 +150,15 @@ func (os *OrderSide) CanSellOrderBeFilled(priceLevel, quantity Decimal) bool {
 	}
 
 	return volume.GreaterThanOrEqual(quantity)
+}
+
+// VolumeAt returns the total volume at the given price, or Zero if none.
+func (os *OrderSide) VolumeAt(price Decimal) Decimal {
+	q, ok := os.prices[price]
+	if !ok {
+		return Zero
+	}
+	return q.Volume()
 }
 
 // BestPriceQueue returns best Orders queue

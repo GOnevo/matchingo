@@ -34,7 +34,7 @@ func TestStopBook_Activate(t *testing.T) {
 		t.Fatal("invalid orders count")
 	}
 
-	slice := stopBook.Activate(matchingo.FromInt(10))
+	slice := stopBook.Activate(matchingo.FromInt(10), matchingo.Buy)
 
 	if len(slice) != 1 {
 		t.Fatal("invalid slice count")
@@ -55,7 +55,7 @@ func TestStopBook_Activate(t *testing.T) {
 
 	stopBook.Append(o3)
 
-	slice = stopBook.Activate(matchingo.FromInt(20))
+	slice = stopBook.Activate(matchingo.FromInt(20), matchingo.Buy)
 
 	if len(slice) != 2 {
 		t.Fatal("invalid slice count")

@@ -2,15 +2,20 @@ package matchingo
 
 import (
 	"strings"
+
+	"github.com/nikolaydubina/fpdecimal"
 )
 
 // OrderBook implements standard matching algorithm
 type OrderBook struct {
-	orders map[string]*Order
-	asks   *OrderSide
-	bids   *OrderSide
-	Stop   *StopBook
-	OCO    map[string]struct{}
+	orders            map[string]*Order
+	asks              *OrderSide
+	bids              *OrderSide
+	Stop              *StopBook
+	OCO               map[string]struct{}
+	emitter           EventEmitter
+	quantityPrecision int // max decimal places for quantity; 0 = unlimited
+	pricePrecision    int // max decimal places for price; 0 = unlimited
 }
 
 // NewOrderBook creates Orderbook object
@@ -22,6 +27,34 @@ func NewOrderBook() *OrderBook {
 		Stop:   NewStopBook(),
 		OCO:    map[string]struct{}{},
 	}
+}
+
+// SetQuantityPrecision sets the maximum number of decimal places allowed for order quantities.
+// A value of 0 disables the check.
+func (ob *OrderBook) SetQuantityPrecision(decimals int) {
+	ob.quantityPrecision = decimals
+}
+
+// SetPricePrecision sets the maximum number of decimal places allowed for order prices.
+// A value of 0 disables the check.
+func (ob *OrderBook) SetPricePrecision(decimals int) {
+	ob.pricePrecision = decimals
+}
+
+// checkPrecision returns an error if d has more decimal places than allowed.
+func checkPrecision(d Decimal, maxDecimals int) bool {
+	if maxDecimals == 0 {
+		return true
+	}
+	fraction := int(fpdecimal.FractionDigits)
+	if maxDecimals >= fraction {
+		return true
+	}
+	factor := int64(1)
+	for i := 0; i < fraction-maxDecimals; i++ {
+		factor *= 10
+	}
+	return d.Scaled()%factor == 0
 }
 
 // GetOrder returns Order by id
@@ -50,7 +83,51 @@ func (ob *OrderBook) CancelOrder(orderID string) *Order {
 		ob.deleteOrder(order)
 	}
 
+	ob.emit(EventCanceled, orderID)
 	return order
+}
+
+// Cancel removes the order with the given ID and returns true on success, false if not found.
+func (ob *OrderBook) Cancel(orderID string) bool {
+	return ob.CancelOrder(orderID) != nil
+}
+
+// Modify changes the price or quantity of a resting limit order.
+// Returns false if the order is not found or is a stop-limit order.
+// In-place decrease: same price and newQty ≤ current open → keep time priority.
+// Re-queue: price change or quantity increase → remove and re-insert at back of new price level, then match.
+func (ob *OrderBook) Modify(orderID string, newPrice, newQty Decimal) (*Done, bool) {
+	order := ob.GetOrder(orderID)
+	if order == nil {
+		return nil, false
+	}
+	if order.IsStopOrder() {
+		return nil, false
+	}
+
+	inPlace := newPrice.Equal(order.price) && newQty.LessThanOrEqual(order.quantity)
+	if inPlace {
+		if order.Side() == Buy {
+			ob.bids.DecreaseOrderQty(order, newQty)
+		} else {
+			ob.asks.DecreaseOrderQty(order, newQty)
+		}
+		if ob.emitter != nil {
+			side_ := ob.sideFor(order.Side())
+			ob.emit(EventVolume, VolumeEventData{Side: order.Side(), Price: order.price, Volume: side_.VolumeAt(order.price)})
+		}
+		return nil, true
+	}
+
+	// Re-queue path: remove and re-submit as a fresh limit order at the back of the new level.
+	ob.deleteOrder(order)
+	order.price = newPrice
+	order.SetQuantity(newQty)
+	order.originalQty = newQty
+	order.canceled = false
+
+	done, _ := ob.processLimitOrder(order)
+	return done, true
 }
 
 // Process public method
@@ -66,6 +143,15 @@ func (ob *OrderBook) Process(order *Order) (done *Done, err error) {
 	}
 	if order.Quantity().LessThanOrEqual(Zero) {
 		return nil, ErrInvalidQuantity
+	}
+	if !checkPrecision(order.Quantity(), ob.quantityPrecision) {
+		return nil, ErrQuantityPrecision
+	}
+	if !order.IsMarketOrder() && !checkPrecision(order.Price(), ob.pricePrecision) {
+		return nil, ErrPricePrecision
+	}
+	if !order.IsMarketOrder() && order.IsStopOrder() && !checkPrecision(order.StopPrice(), ob.pricePrecision) {
+		return nil, ErrPricePrecision
 	}
 	if ob.GetOrder(order.ID()) != nil {
 		return nil, ErrOrderExists
@@ -133,6 +219,11 @@ func (ob *OrderBook) deleteOrder(order *Order) *Order {
 		ob.asks.Remove(order)
 	}
 
+	if ob.emitter != nil {
+		side_ := ob.sideFor(order.Side())
+		ob.emit(EventVolume, VolumeEventData{Side: order.Side(), Price: order.price, Volume: side_.VolumeAt(order.price)})
+	}
+
 	return order
 }
 
@@ -173,7 +264,10 @@ func (ob *OrderBook) processMarketOrder(marketOrder *Order) (done *Done, err err
 	if done.Left.GreaterThan(Zero) {
 		marketOrder.Cancel()
 		done.appendCanceled(marketOrder)
+		ob.emit(EventCanceled, marketOrder.ID())
 	}
+
+	ob.processPendingActivations(done)
 
 	return done, nil
 }
@@ -204,10 +298,25 @@ func (ob *OrderBook) processLimitOrder(limitOrder *Order) (done *Done, err error
 		return
 	}
 
-	if limitOrder.TIF() == FOK {
-		if !side.CanOrderBeFilled(limitOrder.Side(), limitOrder.price, quantity) {
+	if limitOrder.IsPostOnly() {
+		bestPrice := iter()
+		if side.Len() > 0 && comparator(bestPrice.Price()) {
 			limitOrder.Cancel()
 			done.appendCanceled(limitOrder)
+			ob.emit(EventCanceled, limitOrder.ID())
+			return
+		}
+	}
+
+	if limitOrder.TIF() == FOK {
+		fokQty := quantity
+		if limitOrder.IsIceberg() {
+			fokQty = limitOrder.peakQty.Add(limitOrder.hiddenQty)
+		}
+		if !side.CanOrderBeFilled(limitOrder.Side(), limitOrder.price, fokQty) {
+			limitOrder.Cancel()
+			done.appendCanceled(limitOrder)
+			ob.emit(EventCanceled, limitOrder.ID())
 			return
 		}
 	}
@@ -240,6 +349,8 @@ func (ob *OrderBook) processLimitOrder(limitOrder *Order) (done *Done, err error
 		done.Stored = false
 	}
 
+	ob.processPendingActivations(done)
+
 	return
 }
 
@@ -259,19 +370,33 @@ func (ob *OrderBook) appendLimitOrder(order *Order) {
 	}
 
 	ob.orders[order.ID()] = order
+
+	// volume event: order now rests at price
+	if ob.emitter != nil {
+		side_ := ob.sideFor(order.Side())
+		ob.emit(EventVolume, VolumeEventData{Side: order.Side(), Price: order.price, Volume: side_.VolumeAt(order.price)})
+	}
 }
 
 func (ob *OrderBook) activateStopOrders(price Decimal) []*Order {
 	var activated []*Order
-	orders := ob.Stop.Activate(price)
-	for i := range orders {
-		order := &orders[i]
-		order.ActivateStopOrder()
-		ob.appendLimitOrder(order)
-		activated = append(activated, order)
+	for _, slice := range [][]Order{ob.Stop.Activate(price, Buy), ob.Stop.Activate(price, Sell)} {
+		for i := range slice {
+			order := &slice[i]
+			order.ActivateStopOrder()
+			activated = append(activated, order)
+		}
 	}
-
 	return activated
+}
+
+func (ob *OrderBook) processPendingActivations(done *Done) {
+	for _, order := range done.drainPendingActivated() {
+		activatedDone, _ := ob.processLimitOrder(order)
+		done.Activated = append(done.Activated, order.ID())
+		done.Activations = append(done.Activations, activatedDone)
+		ob.emit(EventActivated, order.ID())
+	}
 }
 
 func (ob *OrderBook) processQueueQuote(bestPrice *OrderQueue, quantity Decimal, done *Done) Decimal {
@@ -293,23 +418,43 @@ func (ob *OrderBook) processQueue(orderQueue *OrderQueue, quantity Decimal, done
 			done.appendOrder(o, quantity, price)
 			orderQueue.UpdateVolume(quantity)
 			o.DecreaseQuantity(quantity)
+			ob.emit(EventTrade, TradeEventData{OrderID: o.ID(), Price: price, Amount: quantity, Role: "maker"})
+			ob.emit(EventTrade, TradeEventData{OrderID: done.Order.ID(), Price: done.Order.Price(), Amount: quantity, Role: "taker"})
+			ob.emit(EventVolume, VolumeEventData{Side: o.Side(), Price: price, Volume: orderQueue.Volume()})
 			quantity = Zero
 		} else {
 			ob.appendToOCO(o, done)
 			ob.deleteOrder(o)
 			done.appendOrder(o, orderQuantity, price)
+			ob.emit(EventTrade, TradeEventData{OrderID: o.ID(), Price: price, Amount: orderQuantity, Role: "maker"})
+			ob.emit(EventTrade, TradeEventData{OrderID: done.Order.ID(), Price: done.Order.Price(), Amount: orderQuantity, Role: "taker"})
+			ob.emit(EventVolume, VolumeEventData{Side: o.Side(), Price: price, Volume: orderQueue.Volume()})
 			quantity = quantity.Sub(orderQuantity)
+			if o.IsIceberg() && o.hiddenQty.GreaterThan(Zero) {
+				refillQty := o.peakQty
+				if o.hiddenQty.LessThan(refillQty) {
+					refillQty = o.hiddenQty
+				}
+				o.hiddenQty = o.hiddenQty.Sub(refillQty)
+				o.quantity = refillQty
+				o.originalQty = refillQty
+				ob.appendLimitOrder(o)
+			}
 		}
 	}
 
 	if touch {
-		// activate Stop Orders for this Price level
-		for _, activatedOrder := range ob.activateStopOrders(price) {
-			done.appendActivated(activatedOrder)
-		}
+		done.addPendingActivated(ob.activateStopOrders(price)...)
 	}
 
 	return quantity
+}
+
+func (ob *OrderBook) sideFor(side Side) *OrderSide {
+	if side == Buy {
+		return ob.bids
+	}
+	return ob.asks
 }
 
 func (ob *OrderBook) adaptQuantityBase(quantity, price Decimal) Decimal {
@@ -363,6 +508,44 @@ func (ob *OrderBook) cancelOCO(orderID string, done *Done) {
 	canceledOrder.Cancel()
 	delete(ob.OCO, orderID)
 	done.appendCanceled(canceledOrder)
+	ob.emit(EventCanceled, orderID)
+}
+
+// BestBid returns the highest BUY price level and its total volume, or nil if empty.
+func (ob *OrderBook) BestBid() *Level {
+	q := ob.bids.BestPriceQueue()
+	if q == nil {
+		return nil
+	}
+	return &Level{Price: q.Price(), Volume: q.Volume()}
+}
+
+// BestAsk returns the lowest SELL price level and its total volume, or nil if empty.
+func (ob *OrderBook) BestAsk() *Level {
+	q := ob.asks.BestPriceQueue()
+	if q == nil {
+		return nil
+	}
+	return &Level{Price: q.Price(), Volume: q.Volume()}
+}
+
+// Level returns the total open amount at the given price on the given side, or nil if none.
+func (ob *OrderBook) Level(side Side, price Decimal) *Decimal {
+	var side_ *OrderSide
+	if side == Buy {
+		side_ = ob.bids
+	} else {
+		side_ = ob.asks
+	}
+	prices := side_.Prices()
+	for _, p := range prices {
+		if p.Equal(price) {
+			q := side_.prices[p]
+			v := q.Volume()
+			return &v
+		}
+	}
+	return nil
 }
 
 // String implements fmt.Stringer interface
