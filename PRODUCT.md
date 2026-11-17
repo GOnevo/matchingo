@@ -8,7 +8,7 @@ A Go package implementing a high-performance, price-time priority order book mat
 
 `matchingo` provides a complete limit order book with market, limit, and stop-limit order types, multiple time-in-force policies, iceberg orders, post-only orders, OCO (one-cancels-the-other) pairs, snapshot/restore, and an event emitter interface for real-time feed consumers.
 
-The engine uses a price-sorted tree set per side so that best-price lookup and next-level traversal are O(log n), while FIFO order queues at each price level enforce time priority.
+The engine uses a sorted slice per side for price-level management, giving O(1) best-price lookup and cache-friendly traversal, while FIFO order queues at each price level enforce time priority.
 
 ---
 
@@ -197,6 +197,23 @@ type EventEmitter interface {
 ob.SetEmitter(myEmitter)
 ```
 
+**Channel emitter (async)** — a built-in implementation sends events to a `chan<- Event` you own and read in a separate goroutine:
+
+```go
+ch := make(chan matchingo.Event, 1024)
+ob.SetEventChannel(ch, true) // true = drop on full (non-blocking); false = backpressure
+
+go func() {
+    for e := range ch {
+        switch e.Type {
+        case matchingo.EventTrade:
+            d := e.Data.(matchingo.TradeEventData)
+            // ...
+        }
+    }
+}()
+```
+
 | Event | `data` type | Fired when |
 |-------|-------------|------------|
 | `EventTrade` | `TradeEventData{OrderID, Price, Amount, Role}` | A fill occurs (once per maker, once per taker) |
@@ -241,7 +258,7 @@ err  := ob.Restore(snap)    // clears state and reloads from snap
 
 | Component | Responsibility |
 |-----------|---------------|
-| `OrderSide` | One side of the book (bids or asks). Maintains a `TreeSet` of price levels for O(log n) best-price and next-level access. |
+| `OrderSide` | One side of the book (bids or asks). Maintains a sorted `[]Decimal` of price levels for O(1) best-price lookup and cache-friendly traversal. |
 | `OrderQueue` | FIFO queue of orders at a single price level, plus the total volume at that level. |
 | `StopBook` | Hash map of stop prices → queues. On each trade, scans for triggered stops and returns activated orders sorted by proximity to the trade price. |
 | `Decimal` | Arbitrary-precision decimal arithmetic wrapping `shopspring/decimal`, keeping all price/quantity math exact. |
