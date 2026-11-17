@@ -53,7 +53,7 @@ go get github.com/gonevo/matchingo
 
 ## Examples
 
-The [`examples/`](examples/) directory contains ten runnable examples, one per
+The [`examples/`](examples/) directory contains runnable examples, one per
 concept, each with inline explanations:
 
 | # | Topic | File |
@@ -68,8 +68,9 @@ concept, each with inline explanations:
 | 08 | Post-only orders | [examples/08_post_only_orders/](examples/08_post_only_orders/main.go) |
 | 09 | Snapshot (dump & restore) | [examples/09_snapshot/](examples/09_snapshot/main.go) |
 | 10 | Event emitter | [examples/10_event_emitter/](examples/10_event_emitter/main.go) |
-| 12 | Channel emitter (async) | [examples/12_channel_emitter/](examples/12_channel_emitter/main.go) |
 | 11 | Precision limits | [examples/11_precision_limits/](examples/11_precision_limits/main.go) |
+| 12 | Channel emitter (async) | [examples/12_channel_emitter/](examples/12_channel_emitter/main.go) |
+| 13 | Sequence numbers | [examples/13_sequence/](examples/13_sequence/main.go) |
 
 Run any example with:
 

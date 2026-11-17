@@ -26,7 +26,7 @@ ob.SetPricePrecision(4)    // optional: reject prices with more than 4 decimal p
 
 ### `Order`
 
-An immutable-ish value that carries all order attributes. Created through dedicated constructors; never mutated directly by callers.
+An immutable-ish value that carries all order attributes. Created through dedicated constructors; never mutated directly by callers. `o.CreatedAt()` returns the `time.Time` when the order was constructed; the timestamp is preserved across `Dump`/`Restore`.
 
 ### `Done`
 
@@ -147,7 +147,13 @@ Two paths:
 - **In-place decrease** — same price and `newQty ≤ current open` → quantity reduced without losing time priority
 - **Re-queue** — price change or quantity increase → order is removed and re-inserted at the back of the new price level, then matched as a fresh limit order
 
-Stop-limit orders cannot be modified.
+Stop-limit orders cannot be modified with `Modify`. Use `ModifyStop` instead:
+
+```go
+ok := ob.ModifyStop(orderID, newStopPrice, newLimitPrice, newQty)
+```
+
+Removes the stop order from its current stop-price bucket and re-inserts it at the new stop price. Returns false if the order is not found or is not a stop-limit order.
 
 ### Look Up an Order
 
@@ -214,9 +220,12 @@ go func() {
 }()
 ```
 
+Every successful `Process` call increments a monotonic `uint64` counter accessible via `ob.Sequence()`. The counter is stamped on `Done.Sequence`, on each `TradeEventData.Sequence`, and — when using `ChannelEmitter` — on `Event.Sequence`, enabling gap detection and ordered replay without an external clock.
+
 | Event | `data` type | Fired when |
 |-------|-------------|------------|
-| `EventTrade` | `TradeEventData{OrderID, Price, Amount, Role}` | A fill occurs (once per maker, once per taker) |
+| `EventTrade` | `TradeEventData{TradeID, MakerID, TakerID, Price, Amount, Sequence}` | One canonical event per fill, at the actual trade price |
+| `EventBBO` | `BBOEventData{Bid *Level, Ask *Level}` | Best bid or ask price changes; either field is nil when that side is empty |
 | `EventVolume` | `VolumeEventData{Side, Price, Volume}` | Total volume at a price level changes |
 | `EventDepth` | `*Depth` | `ob.Depth()` is called |
 | `EventCanceled` | `string` (order ID) | Any order is canceled for any reason |
@@ -229,11 +238,11 @@ go func() {
 The full engine state can be serialized to a plain-data struct and restored later, enabling persistence, replication, or crash recovery.
 
 ```go
-snap := ob.Dump()           // Snapshot{Version, Bids, Asks, Stops, OCO}
+snap := ob.Dump()           // Snapshot{Version, Sequence, TradeID, Bids, Asks, Stops, OCO}
 err  := ob.Restore(snap)    // clears state and reloads from snap
 ```
 
-`Snapshot` is version-stamped; `Restore` returns an error if the version does not match the current engine format. All order attributes — including iceberg hidden quantities, OCO links, and stop prices — are preserved.
+`Snapshot` is version-stamped; `Restore` returns an error if the version does not match the current engine format. All order attributes — including iceberg hidden quantities, OCO links, and stop prices — are preserved. The monotonic sequence counter and the trade ID counter are both included in the snapshot and resume from where they left off after a restore.
 
 ---
 

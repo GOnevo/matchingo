@@ -34,8 +34,8 @@ func main() {
 			switch e.Type {
 			case matchingo.EventTrade:
 				d := e.Data.(matchingo.TradeEventData)
-				fmt.Printf("  [TRADE]     order=%s  price=%s  amount=%s  role=%s\n",
-					d.OrderID, d.Price, d.Amount, d.Role)
+				fmt.Printf("  [TRADE]     id=%d  maker=%s  taker=%s  price=%s  amount=%s\n",
+					d.TradeID, d.MakerID, d.TakerID, d.Price, d.Amount)
 			case matchingo.EventVolume:
 				d := e.Data.(matchingo.VolumeEventData)
 				fmt.Printf("  [VOLUME]    side=%s  price=%s  volume=%s\n",

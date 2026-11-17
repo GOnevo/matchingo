@@ -9,7 +9,15 @@ const (
 	EventTrade     EventType = "trade"
 	EventCanceled  EventType = "canceled"
 	EventActivated EventType = "activated"
+	EventBBO       EventType = "bbo"
 )
+
+// BBOEventData carries the best bid and best ask after a change.
+// Either field is nil when that side of the book is empty.
+type BBOEventData struct {
+	Bid *Level
+	Ask *Level
+}
 
 // VolumeEventData carries the data for a volume event.
 type VolumeEventData struct {
@@ -18,18 +26,22 @@ type VolumeEventData struct {
 	Volume Decimal
 }
 
-// TradeEventData carries the data for a trade event.
+// TradeEventData carries the data for a single canonical trade event.
+// One event is emitted per fill; it names both sides and the actual trade price.
 type TradeEventData struct {
-	OrderID string
-	Price   Decimal
-	Amount  Decimal
-	Role    string // "maker" or "taker"
+	TradeID  uint64
+	MakerID  string
+	TakerID  string
+	Price    Decimal
+	Amount   Decimal
+	Sequence uint64
 }
 
 // Event is a single order book event sent over a channel emitter.
 type Event struct {
-	Type EventType
-	Data any
+	Type     EventType
+	Data     any
+	Sequence uint64
 }
 
 // EventEmitter receives events from the order book.
@@ -51,9 +63,14 @@ func NewChannelEmitter(ch chan<- Event, dropOnFull bool) *ChannelEmitter {
 	return &ChannelEmitter{ch: ch, dropOnFull: dropOnFull}
 }
 
-// Emit sends the event to the channel, dropping or blocking based on dropOnFull.
+// Emit implements EventEmitter. Sequence is always 0; use EmitSeq for a stamped event.
 func (c *ChannelEmitter) Emit(eventType EventType, data any) {
-	e := Event{Type: eventType, Data: data}
+	c.EmitSeq(0, eventType, data)
+}
+
+// EmitSeq sends a sequenced event to the channel.
+func (c *ChannelEmitter) EmitSeq(seq uint64, eventType EventType, data any) {
+	e := Event{Type: eventType, Data: data, Sequence: seq}
 	if c.dropOnFull {
 		select {
 		case c.ch <- e:
@@ -77,7 +94,12 @@ func (ob *OrderBook) SetEventChannel(ch chan<- Event, dropOnFull bool) {
 }
 
 func (ob *OrderBook) emit(eventType EventType, data any) {
-	if ob.emitter != nil {
-		ob.emitter.Emit(eventType, data)
+	if ob.emitter == nil {
+		return
 	}
+	if ce, ok := ob.emitter.(*ChannelEmitter); ok {
+		ce.EmitSeq(ob.sequence, eventType, data)
+		return
+	}
+	ob.emitter.Emit(eventType, data)
 }

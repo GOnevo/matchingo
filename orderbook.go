@@ -2,6 +2,7 @@ package matchingo
 
 import (
 	"strings"
+	"time"
 
 	"github.com/nikolaydubina/fpdecimal"
 )
@@ -14,9 +15,15 @@ type OrderBook struct {
 	Stop              *StopBook
 	OCO               map[string]struct{}
 	emitter           EventEmitter
+	sequence          uint64
+	tradeID           uint64
 	quantityPrecision int // max decimal places for quantity; 0 = unlimited
 	pricePrecision    int // max decimal places for price; 0 = unlimited
 }
+
+// Sequence returns the current monotonic sequence counter.
+// It is incremented once per successful Process call.
+func (ob *OrderBook) Sequence() uint64 { return ob.sequence }
 
 // NewOrderBook creates Orderbook object
 func NewOrderBook() *OrderBook {
@@ -74,6 +81,11 @@ func (ob *OrderBook) CancelOrder(orderID string) *Order {
 		return nil
 	}
 
+	var prevBid, prevAsk Decimal
+	if ob.emitter != nil {
+		prevBid, prevAsk = ob.bboSnapshot()
+	}
+
 	order.Cancel()
 
 	if order.IsStopOrder() {
@@ -84,6 +96,7 @@ func (ob *OrderBook) CancelOrder(orderID string) *Order {
 	}
 
 	ob.emit(EventCanceled, orderID)
+	ob.emitBBOIfChanged(prevBid, prevAsk)
 	return order
 }
 
@@ -105,6 +118,11 @@ func (ob *OrderBook) Modify(orderID string, newPrice, newQty Decimal) (*Done, bo
 		return nil, false
 	}
 
+	var prevBid, prevAsk Decimal
+	if ob.emitter != nil {
+		prevBid, prevAsk = ob.bboSnapshot()
+	}
+
 	inPlace := newPrice.Equal(order.price) && newQty.LessThanOrEqual(order.quantity)
 	if inPlace {
 		if order.Side() == Buy {
@@ -116,6 +134,7 @@ func (ob *OrderBook) Modify(orderID string, newPrice, newQty Decimal) (*Done, bo
 			side_ := ob.sideFor(order.Side())
 			ob.emit(EventVolume, VolumeEventData{Side: order.Side(), Price: order.price, Volume: side_.VolumeAt(order.price)})
 		}
+		ob.emitBBOIfChanged(prevBid, prevAsk)
 		return nil, true
 	}
 
@@ -127,7 +146,25 @@ func (ob *OrderBook) Modify(orderID string, newPrice, newQty Decimal) (*Done, bo
 	order.canceled = false
 
 	done, _ := ob.processLimitOrder(order)
+	ob.emitBBOIfChanged(prevBid, prevAsk)
 	return done, true
+}
+
+// ModifyStop changes the stop price, limit price, and/or quantity of a resting stop-limit order.
+// Returns false if the order is not found or is not a stop-limit order.
+// The order is removed from the stop book and re-inserted at the back of the new stop price bucket.
+func (ob *OrderBook) ModifyStop(orderID string, newStopPrice, newLimitPrice, newQty Decimal) bool {
+	order := ob.GetOrder(orderID)
+	if order == nil || !order.IsStopOrder() {
+		return false
+	}
+	ob.Stop.Remove(order)
+	order.stop = newStopPrice
+	order.price = newLimitPrice
+	order.SetQuantity(newQty)
+	order.originalQty = newQty
+	ob.Stop.Append(order)
+	return true
 }
 
 // Process public method
@@ -157,15 +194,28 @@ func (ob *OrderBook) Process(order *Order) (done *Done, err error) {
 		return nil, ErrOrderExists
 	}
 
+	if order.createdAt.IsZero() {
+		order.createdAt = time.Now()
+	}
+	ob.sequence++
+	var prevBid, prevAsk Decimal
+	if ob.emitter != nil {
+		prevBid, prevAsk = ob.bboSnapshot()
+	}
+
 	if order.IsMarketOrder() {
-		return ob.processMarketOrder(order)
+		done, err = ob.processMarketOrder(order)
+	} else if order.IsLimitOrder() {
+		done, err = ob.processLimitOrder(order)
+	} else {
+		done, err = ob.processStopOrder(order)
 	}
 
-	if order.IsLimitOrder() {
-		return ob.processLimitOrder(order)
+	if done != nil {
+		done.Sequence = ob.sequence
 	}
-
-	return ob.processStopOrder(order)
+	ob.emitBBOIfChanged(prevBid, prevAsk)
+	return done, err
 }
 
 // CalculateMarketPrice returns total market Price for requested quantity
@@ -418,16 +468,16 @@ func (ob *OrderBook) processQueue(orderQueue *OrderQueue, quantity Decimal, done
 			done.appendOrder(o, quantity, price)
 			orderQueue.UpdateVolume(quantity)
 			o.DecreaseQuantity(quantity)
-			ob.emit(EventTrade, TradeEventData{OrderID: o.ID(), Price: price, Amount: quantity, Role: "maker"})
-			ob.emit(EventTrade, TradeEventData{OrderID: done.Order.ID(), Price: done.Order.Price(), Amount: quantity, Role: "taker"})
+			ob.tradeID++
+			ob.emit(EventTrade, TradeEventData{TradeID: ob.tradeID, MakerID: o.ID(), TakerID: done.Order.ID(), Price: price, Amount: quantity, Sequence: ob.sequence})
 			ob.emit(EventVolume, VolumeEventData{Side: o.Side(), Price: price, Volume: orderQueue.Volume()})
 			quantity = Zero
 		} else {
 			ob.appendToOCO(o, done)
 			ob.deleteOrder(o)
 			done.appendOrder(o, orderQuantity, price)
-			ob.emit(EventTrade, TradeEventData{OrderID: o.ID(), Price: price, Amount: orderQuantity, Role: "maker"})
-			ob.emit(EventTrade, TradeEventData{OrderID: done.Order.ID(), Price: done.Order.Price(), Amount: orderQuantity, Role: "taker"})
+			ob.tradeID++
+			ob.emit(EventTrade, TradeEventData{TradeID: ob.tradeID, MakerID: o.ID(), TakerID: done.Order.ID(), Price: price, Amount: orderQuantity, Sequence: ob.sequence})
 			ob.emit(EventVolume, VolumeEventData{Side: o.Side(), Price: price, Volume: orderQueue.Volume()})
 			quantity = quantity.Sub(orderQuantity)
 			if o.IsIceberg() && o.hiddenQty.GreaterThan(Zero) {
@@ -448,6 +498,29 @@ func (ob *OrderBook) processQueue(orderQueue *OrderQueue, quantity Decimal, done
 	}
 
 	return quantity
+}
+
+// bboSnapshot captures the current best bid and ask prices (zero if empty).
+func (ob *OrderBook) bboSnapshot() (bidPrice, askPrice Decimal) {
+	if b := ob.bids.BestPriceQueue(); b != nil {
+		bidPrice = b.Price()
+	}
+	if a := ob.asks.BestPriceQueue(); a != nil {
+		askPrice = a.Price()
+	}
+	return
+}
+
+// emitBBOIfChanged emits EventBBO when the best bid or ask changed since prevBid/prevAsk.
+func (ob *OrderBook) emitBBOIfChanged(prevBid, prevAsk Decimal) {
+	if ob.emitter == nil {
+		return
+	}
+	newBid, newAsk := ob.bboSnapshot()
+	if newBid.Equal(prevBid) && newAsk.Equal(prevAsk) {
+		return
+	}
+	ob.emit(EventBBO, BBOEventData{Bid: ob.BestBid(), Ask: ob.BestAsk()})
 }
 
 func (ob *OrderBook) sideFor(side Side) *OrderSide {

@@ -98,7 +98,7 @@ func TestEvent_VolumeAfterCancel(t *testing.T) {
 	}
 }
 
-// §18.16: Trade event fires for each trade with id, price, amount, role.
+// §18.16: One canonical trade event per fill with both order IDs, correct price, and unique TradeID.
 func TestEvent_TradeEvents(t *testing.T) {
 	ob, em := newObWithEmitter()
 	ob.Process(matchingo.NewLimitOrder("sell-1", matchingo.Sell, matchingo.FromInt(5), matchingo.FromInt(100), "", ""))
@@ -107,23 +107,25 @@ func TestEvent_TradeEvents(t *testing.T) {
 	ob.Process(matchingo.NewLimitOrder("buy-1", matchingo.Buy, matchingo.FromInt(5), matchingo.FromInt(100), "", ""))
 
 	trades := em.eventsOf(matchingo.EventTrade)
-	if len(trades) < 2 {
-		t.Fatalf("expected at least 2 trade events (maker + taker), got %d", len(trades))
+	if len(trades) != 1 {
+		t.Fatalf("expected exactly 1 trade event per fill, got %d", len(trades))
 	}
 
-	roles := map[string]bool{}
-	for _, ev := range trades {
-		td := ev.data.(matchingo.TradeEventData)
-		roles[td.Role] = true
-		if td.Amount.Equal(matchingo.Zero) {
-			t.Errorf("trade event amount should not be zero")
-		}
+	td := trades[0].data.(matchingo.TradeEventData)
+	if td.MakerID != "sell-1" {
+		t.Errorf("expected MakerID=sell-1, got %s", td.MakerID)
 	}
-	if !roles["maker"] {
-		t.Error("missing maker trade event")
+	if td.TakerID != "buy-1" {
+		t.Errorf("expected TakerID=buy-1, got %s", td.TakerID)
 	}
-	if !roles["taker"] {
-		t.Error("missing taker trade event")
+	if !td.Price.Equal(matchingo.FromInt(100)) {
+		t.Errorf("expected trade Price=100, got %s", td.Price)
+	}
+	if td.Amount.Equal(matchingo.Zero) {
+		t.Errorf("trade event amount should not be zero")
+	}
+	if td.TradeID == 0 {
+		t.Errorf("expected non-zero TradeID")
 	}
 }
 
@@ -177,6 +179,61 @@ func TestEvent_DepthEvent(t *testing.T) {
 	depths := em.eventsOf(matchingo.EventDepth)
 	if len(depths) == 0 {
 		t.Fatal("expected depth event when Depth() is called, got none")
+	}
+}
+
+// §18.16: BBO event fires when best bid or ask changes.
+func TestEvent_BBOEvent(t *testing.T) {
+	ob, em := newObWithEmitter()
+
+	// Place a resting sell — BBO ask changes from nil to 100.
+	ob.Process(matchingo.NewLimitOrder("sell-1", matchingo.Sell, matchingo.FromInt(5), matchingo.FromInt(100), "", ""))
+	bbos := em.eventsOf(matchingo.EventBBO)
+	if len(bbos) == 0 {
+		t.Fatal("expected BBO event after resting sell, got none")
+	}
+	d := bbos[len(bbos)-1].data.(matchingo.BBOEventData)
+	if d.Ask == nil || !d.Ask.Price.Equal(matchingo.FromInt(100)) {
+		t.Errorf("expected ask=100, got %v", d.Ask)
+	}
+
+	em.events = nil
+
+	// Cancel the sell — BBO ask changes back to nil.
+	ob.Cancel("sell-1")
+	bbos = em.eventsOf(matchingo.EventBBO)
+	if len(bbos) == 0 {
+		t.Fatal("expected BBO event after cancel, got none")
+	}
+	d = bbos[len(bbos)-1].data.(matchingo.BBOEventData)
+	if d.Ask != nil {
+		t.Errorf("expected ask=nil after cancel, got %v", d.Ask)
+	}
+
+	em.events = nil
+
+	// Place sell and buy that trade fully — BBO fires when book changes.
+	ob.Process(matchingo.NewLimitOrder("sell-2", matchingo.Sell, matchingo.FromInt(3), matchingo.FromInt(50), "", ""))
+	em.events = nil
+	ob.Process(matchingo.NewLimitOrder("buy-1", matchingo.Buy, matchingo.FromInt(3), matchingo.FromInt(50), "", ""))
+	bbos = em.eventsOf(matchingo.EventBBO)
+	if len(bbos) == 0 {
+		t.Fatal("expected BBO event after trade clears level, got none")
+	}
+}
+
+// §18.16: BBO event does NOT fire when BBO is unchanged (e.g. mid-book cancel).
+func TestEvent_NoBBOWhenUnchanged(t *testing.T) {
+	ob, em := newObWithEmitter()
+	ob.Process(matchingo.NewLimitOrder("sell-1", matchingo.Sell, matchingo.FromInt(5), matchingo.FromInt(100), "", ""))
+	ob.Process(matchingo.NewLimitOrder("sell-2", matchingo.Sell, matchingo.FromInt(5), matchingo.FromInt(110), "", ""))
+	em.events = nil
+
+	// Cancel sell-2 (110) — BBO ask is still sell-1 at 100, no change.
+	ob.Cancel("sell-2")
+	bbos := em.eventsOf(matchingo.EventBBO)
+	if len(bbos) != 0 {
+		t.Errorf("expected no BBO event when BBO unchanged, got %d", len(bbos))
 	}
 }
 

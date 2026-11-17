@@ -2,6 +2,7 @@ package order
 
 import (
 	"testing"
+	"time"
 
 	"github.com/gonevo/matchingo"
 )
@@ -144,5 +145,25 @@ func TestOrder_String(t *testing.T) {
 	}
 	if !order.IsLimitOrder() {
 		t.Fatal("order type changed")
+	}
+}
+
+func TestOrder_CreatedAt(t *testing.T) {
+	ob := matchingo.NewOrderBook()
+	o := matchingo.NewLimitOrder("id", matchingo.Buy, matchingo.FromInt(1), matchingo.FromInt(100), "", "")
+
+	if !o.CreatedAt().IsZero() {
+		t.Fatal("CreatedAt should be zero before Process")
+	}
+
+	before := time.Now()
+	ob.Process(o)
+	after := time.Now()
+
+	if o.CreatedAt().IsZero() {
+		t.Fatal("CreatedAt should not be zero after Process")
+	}
+	if o.CreatedAt().Before(before) || o.CreatedAt().After(after) {
+		t.Errorf("CreatedAt %v not in [%v, %v]", o.CreatedAt(), before, after)
 	}
 }

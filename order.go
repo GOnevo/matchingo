@@ -2,6 +2,7 @@ package matchingo
 
 import (
 	"encoding/json"
+	"time"
 )
 
 // TradeOrder structure
@@ -58,6 +59,7 @@ type Order struct {
 	peakQty     Decimal
 	hiddenQty   Decimal
 	postOnly    bool
+	createdAt   time.Time
 }
 
 // NewMarketOrder creates new constant object Order
@@ -235,6 +237,11 @@ func (o *Order) HiddenQty() Decimal {
 // ID returns OrderID field copy
 func (o *Order) ID() string {
 	return o.id
+}
+
+// CreatedAt returns the time the order was created.
+func (o *Order) CreatedAt() time.Time {
+	return o.createdAt
 }
 
 // Side returns side of the Order

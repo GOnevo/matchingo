@@ -5,7 +5,7 @@
 //
 // Event types:
 //
-//	EventTrade     — a fill occurred (taker + maker order IDs, price, qty)
+//	EventTrade     — a fill occurred (maker + taker order IDs, actual trade price, qty)
 //	EventVolume    — the visible volume at a price level changed
 //	EventDepth     — full depth snapshot was requested
 //	EventCanceled  — an order was canceled
@@ -30,8 +30,8 @@ func (l *logger) Emit(eventType matchingo.EventType, data any) {
 	switch eventType {
 	case matchingo.EventTrade:
 		d := data.(matchingo.TradeEventData)
-		fmt.Printf("  [TRADE]     order=%s  price=%s  amount=%s  role=%s\n",
-			d.OrderID, d.Price, d.Amount, d.Role)
+		fmt.Printf("  [TRADE]     id=%d  maker=%s  taker=%s  price=%s  amount=%s\n",
+			d.TradeID, d.MakerID, d.TakerID, d.Price, d.Amount)
 
 	case matchingo.EventVolume:
 		d := data.(matchingo.VolumeEventData)

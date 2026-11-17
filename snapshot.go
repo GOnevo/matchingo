@@ -1,6 +1,9 @@
 package matchingo
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 const snapshotVersion = 1
 
@@ -19,12 +22,14 @@ type OrderRecord struct {
 	PeakQty     Decimal
 	HiddenQty   Decimal
 	PostOnly    bool
+	CreatedAt   time.Time
 }
 
-// Snapshot is a serialisable snapshot of the full engine state.
+// Snapshot is a serializable snapshot of the full engine state.
 type Snapshot struct {
 	Version  int
 	Sequence uint64
+	TradeID  uint64
 	Bids     []OrderRecord
 	Asks     []OrderRecord
 	Stops    []OrderRecord
@@ -34,7 +39,9 @@ type Snapshot struct {
 // Dump returns a plain-data snapshot of the current engine state.
 func (ob *OrderBook) Dump() Snapshot {
 	snap := Snapshot{
-		Version: snapshotVersion,
+		Version:  snapshotVersion,
+		Sequence: ob.sequence,
+		TradeID:  ob.tradeID,
 	}
 
 	for _, price := range ob.bids.Prices() {
@@ -75,6 +82,8 @@ func (ob *OrderBook) Restore(snap Snapshot) error {
 	ob.asks = NewOrderSideAsk()
 	ob.Stop = NewStopBook()
 	ob.OCO = map[string]struct{}{}
+	ob.sequence = snap.Sequence
+	ob.tradeID = snap.TradeID
 
 	for _, rec := range snap.Bids {
 		o := recordToOrder(rec)
@@ -116,6 +125,7 @@ func orderToRecord(o *Order) OrderRecord {
 		PeakQty:     o.peakQty,
 		HiddenQty:   o.hiddenQty,
 		PostOnly:    o.postOnly,
+		CreatedAt:   o.createdAt,
 	}
 }
 
@@ -134,5 +144,6 @@ func recordToOrder(rec OrderRecord) *Order {
 		peakQty:     rec.PeakQty,
 		hiddenQty:   rec.HiddenQty,
 		postOnly:    rec.PostOnly,
+		createdAt:   rec.CreatedAt,
 	}
 }

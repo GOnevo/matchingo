@@ -16,22 +16,9 @@
 
 ## Order Lifecycle
 
-- **Modify stop price** — `Modify` only changes price/qty on resting limit orders; stop-limit orders cannot have their stop price amended
 - **Partial cancel (reduce-only)** — explicit API to reduce quantity without full cancel; some engines treat a quantity-decrease modify differently from a cancel+resubmit to preserve audit trail
 - **Order expiry / time-to-live** — engine-side TTL with automatic cancellation; currently all lifecycle management is external
 - **Replace (cancel-replace atomic)** — a single atomic swap that guarantees no fill between the cancel and the new order; different from the current Modify re-queue which goes through Process
-
-## Sequence & Audit
-
-- **Sequence number on Done / events** — `Snapshot.Sequence` exists but is never incremented; trades and events carry no monotonic sequence, making replay and gap detection impossible
-- **Order timestamps** — no creation or last-update timestamp on `Order`; required for GTD expiry, audit logs, and latency analytics
-- **Trade ID** — individual trades have no unique identifier; standard for FIX/ITCH/PITCH protocols and clearing systems
-
-## Market Data
-
-- **Full depth snapshot with sequence** — `Dump()` captures state but `Snapshot.Sequence` is always 0; a sequenced snapshot paired with an incremental feed (like ITCH AddOrder / DeleteOrder messages) is the standard dissemination model
-- **Top-of-book (BBO) change event** — no dedicated event when the best bid or offer changes; callers must infer it from volume events
-- **Trade print / last-sale event** — `EventTrade` exists but fires twice (once per side) with inconsistent price field (taker side uses `done.Order.Price()` not the actual trade price); a single canonical trade-print event per fill is standard
 
 ## Infrastructure
 

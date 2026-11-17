@@ -12,6 +12,7 @@ type Done struct {
 	Activated        []string
 	Activations      []*Done
 	Stored           bool
+	Sequence         uint64
 	Quantity         Decimal
 	Left             Decimal
 	Processed        Decimal
@@ -106,6 +107,7 @@ func (d *Done) MarshalJSON() ([]byte, error) {
 		Left        string       `json:"left"`
 		Processed   string       `json:"processed"`
 		Stored      bool         `json:"stored"`
+		Sequence    uint64       `json:"sequence"`
 	}{
 		Order:       d.Order.ToSimple(),
 		Trades:      d.tradesToSlice(),
@@ -115,6 +117,7 @@ func (d *Done) MarshalJSON() ([]byte, error) {
 		Left:        d.Left.String(),
 		Processed:   d.Processed.String(),
 		Stored:      d.Stored,
+		Sequence:    d.Sequence,
 	}
 	return json.Marshal(customStruct)
 }

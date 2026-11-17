@@ -132,3 +132,37 @@ func TestModify_RequeueMatchesImmediately(t *testing.T) {
 		t.Fatal("re-queued order should match immediately when it crosses")
 	}
 }
+
+// ModifyStop changes stop price, limit price, and qty on a resting stop-limit order.
+func TestModifyStop_ChangesStopPrice(t *testing.T) {
+	ob := newOB()
+	ob.Process(matchingo.NewStopLimitOrder("stop-1", matchingo.Buy, d("5"), d("100"), d("95"), ""))
+
+	ok := ob.ModifyStop("stop-1", d("90"), d("100"), d("5"))
+	if !ok {
+		t.Fatal("ModifyStop should return true for a known stop order")
+	}
+
+	// Trade at 89: below new stop (90), should NOT activate.
+	ob.Process(matchingo.NewLimitOrder("sell-a", matchingo.Sell, d("1"), d("89"), matchingo.GTC, ""))
+	done, _ := ob.Process(matchingo.NewLimitOrder("buy-a", matchingo.Buy, d("1"), d("89"), matchingo.GTC, ""))
+	if len(done.Activated) != 0 {
+		t.Fatal("stop should not activate at 89 when new stop is 90")
+	}
+
+	// Trade at 90: equals new stop (90), should activate (Buy stop fires when stop ≤ trade price).
+	ob.Process(matchingo.NewLimitOrder("sell-b", matchingo.Sell, d("6"), d("90"), matchingo.GTC, ""))
+	done2, _ := ob.Process(matchingo.NewLimitOrder("buy-b", matchingo.Buy, d("1"), d("90"), matchingo.GTC, ""))
+	if len(done2.Activated) == 0 {
+		t.Fatal("stop should activate when trade price reaches new stop price 90")
+	}
+}
+
+// ModifyStop returns false for a limit order.
+func TestModifyStop_ReturnsFalseForNonStop(t *testing.T) {
+	ob := newOB()
+	ob.Process(matchingo.NewLimitOrder("lim-1", matchingo.Buy, d("5"), d("100"), matchingo.GTC, ""))
+	if ob.ModifyStop("lim-1", d("90"), d("100"), d("5")) {
+		t.Fatal("ModifyStop should return false for a limit order")
+	}
+}
