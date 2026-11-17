@@ -2,14 +2,14 @@ package matchingo
 
 import (
 	"fmt"
+	"sort"
 	"strings"
-
-	"github.com/hashicorp/go-set/v3"
 )
 
 // OrderSide implements facade to operations with Order queue
 type OrderSide struct {
-	orderedPrices *set.TreeSet[Decimal]
+	orderedPrices []Decimal
+	less          func(a, b Decimal) bool
 	prices        map[Decimal]*OrderQueue
 	len           int
 	depth         int
@@ -18,9 +18,7 @@ type OrderSide struct {
 // NewOrderSideAsk creates new OrderSide manager
 func NewOrderSideAsk() *OrderSide {
 	return &OrderSide{
-		orderedPrices: set.NewTreeSet[Decimal](func(a Decimal, b Decimal) int {
-			return a.Compare(b)
-		}),
+		less:   func(a, b Decimal) bool { return a.Compare(b) < 0 },
 		prices: map[Decimal]*OrderQueue{},
 	}
 }
@@ -28,11 +26,42 @@ func NewOrderSideAsk() *OrderSide {
 // NewOrderSideBid creates new OrderSide manager
 func NewOrderSideBid() *OrderSide {
 	return &OrderSide{
-		orderedPrices: set.NewTreeSet[Decimal](func(a Decimal, b Decimal) int {
-			return b.Compare(a)
-		}),
+		less:   func(a, b Decimal) bool { return b.Compare(a) < 0 },
 		prices: map[Decimal]*OrderQueue{},
 	}
+}
+
+func (os *OrderSide) priceInsert(p Decimal) {
+	i := sort.Search(len(os.orderedPrices), func(i int) bool { return !os.less(os.orderedPrices[i], p) })
+	if i < len(os.orderedPrices) && os.orderedPrices[i] == p {
+		return
+	}
+	os.orderedPrices = append(os.orderedPrices, Decimal{})
+	copy(os.orderedPrices[i+1:], os.orderedPrices[i:])
+	os.orderedPrices[i] = p
+}
+
+func (os *OrderSide) priceRemove(p Decimal) {
+	i := sort.Search(len(os.orderedPrices), func(i int) bool { return !os.less(os.orderedPrices[i], p) })
+	if i >= len(os.orderedPrices) || os.orderedPrices[i] != p {
+		return
+	}
+	os.orderedPrices = append(os.orderedPrices[:i], os.orderedPrices[i+1:]...)
+}
+
+func (os *OrderSide) priceMin() (Decimal, bool) {
+	if len(os.orderedPrices) == 0 {
+		return Zero, false
+	}
+	return os.orderedPrices[0], true
+}
+
+func (os *OrderSide) priceFirstAbove(p Decimal) (Decimal, bool) {
+	i := sort.Search(len(os.orderedPrices), func(i int) bool { return os.less(p, os.orderedPrices[i]) })
+	if i >= len(os.orderedPrices) {
+		return Zero, false
+	}
+	return os.orderedPrices[i], true
 }
 
 // Len returns amount of Orders
@@ -56,7 +85,7 @@ func (os *OrderSide) Append(o *Order) {
 	if !ok {
 		priceQueue = NewOrderQueue(price)
 		os.prices[price] = priceQueue
-		os.orderedPrices.Insert(price)
+		os.priceInsert(price)
 		os.depth++
 	}
 	priceQueue.Append(o)
@@ -77,7 +106,7 @@ func (os *OrderSide) Remove(order *Order) *Order {
 
 	if priceQueue.Len() == 0 {
 		delete(os.prices, price)
-		os.orderedPrices.Remove(price)
+		os.priceRemove(price)
 		os.depth--
 	}
 
@@ -98,7 +127,9 @@ func (os *OrderSide) DecreaseOrderQty(order *Order, newQty Decimal) {
 
 // Prices returns slice of prices
 func (os *OrderSide) Prices() []Decimal {
-	return os.orderedPrices.Slice()
+	out := make([]Decimal, len(os.orderedPrices))
+	copy(out, os.orderedPrices)
+	return out
 }
 
 // CanOrderBeFilled checks FOK
@@ -163,19 +194,15 @@ func (os *OrderSide) VolumeAt(price Decimal) Decimal {
 
 // BestPriceQueue returns best Orders queue
 func (os *OrderSide) BestPriceQueue() *OrderQueue {
-	if os.depth > 0 && !os.orderedPrices.Empty() {
-		return os.prices[os.orderedPrices.Min()]
+	if p, ok := os.priceMin(); ok {
+		return os.prices[p]
 	}
 	return nil
 }
 
 // NextLevel returns next Orders queue after level
 func (os *OrderSide) NextLevel(level Decimal) *OrderQueue {
-	if os.depth > 0 && !os.orderedPrices.Empty() {
-		price, ok := os.orderedPrices.FirstAbove(level)
-		if !ok {
-			return nil
-		}
+	if price, ok := os.priceFirstAbove(level); ok {
 		return os.prices[price]
 	}
 	return nil
@@ -185,7 +212,7 @@ func (os *OrderSide) NextLevel(level Decimal) *OrderQueue {
 func (os *OrderSide) String() string {
 	sb := strings.Builder{}
 
-	for _, price := range os.orderedPrices.Slice() {
+	for _, price := range os.orderedPrices {
 		sb.WriteString(
 			fmt.Sprintf(
 				"\n%s -> orders: %d, volume: %s",
