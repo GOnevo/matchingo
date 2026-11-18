@@ -17,6 +17,7 @@ type Done struct {
 	Left             Decimal
 	Processed        Decimal
 	pendingActivated []*Order
+	stpHalt          bool
 }
 
 // DoneJSON structure

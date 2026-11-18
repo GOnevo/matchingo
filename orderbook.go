@@ -1,6 +1,7 @@
 package matchingo
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -17,8 +18,17 @@ type OrderBook struct {
 	emitter           EventEmitter
 	sequence          uint64
 	tradeID           uint64
-	quantityPrecision int // max decimal places for quantity; 0 = unlimited
-	pricePrecision    int // max decimal places for price; 0 = unlimited
+	instrument        *Instrument
+	wal               WAL
+	walSeq            uint64 // sequence of the last record written to (or replayed from) the WAL
+	walErr            error
+	halted            bool
+	lastPrice         Decimal // last trade price level, the circuit breaker reference
+	breakerPct        Decimal // halt when a trade moves more than this percent from lastPrice; 0 = off
+	clock             func() time.Time
+	nextExpiry        time.Time // lower bound of the earliest GTD expiry; zero = none
+	quantityPrecision int       // max decimal places for quantity; 0 = unlimited
+	pricePrecision    int       // max decimal places for price; 0 = unlimited
 }
 
 // Sequence returns the current monotonic sequence counter.
@@ -44,6 +54,27 @@ func WithEmitter(e EventEmitter) Option {
 	return func(ob *OrderBook) { ob.emitter = e }
 }
 
+// WithClock sets the time source used for GTD expiry, order timestamps and WAL records (default: current UTC time).
+func WithClock(clock func() time.Time) Option {
+	return func(ob *OrderBook) { ob.clock = clock }
+}
+
+// WithInstrument validates every order against the instrument's tick size, lot size,
+// quantity range and price band. It panics on a negative or inverted definition.
+func WithInstrument(in Instrument) Option {
+	in.validate()
+	return func(ob *OrderBook) { ob.instrument = &in }
+}
+
+// Instrument returns the configured instrument, or nil if none.
+func (ob *OrderBook) Instrument() *Instrument { return ob.instrument }
+
+// WithCircuitBreaker halts trading when a trade price moves more than percent
+// (5 means 5%) away from the previous trade price. 0 disables it.
+func WithCircuitBreaker(percent Decimal) Option {
+	return func(ob *OrderBook) { ob.breakerPct = percent }
+}
+
 // WithPrecision sets both quantity and price precision in one call.
 func WithPrecision(quantityDecimals, priceDecimals int) Option {
 	return func(ob *OrderBook) {
@@ -52,6 +83,10 @@ func WithPrecision(quantityDecimals, priceDecimals int) Option {
 	}
 }
 
+// utcNow is the default clock: UTC without the monotonic reading, so times survive
+// a JSON round trip (WAL, snapshots) unchanged.
+func utcNow() time.Time { return time.Now().UTC().Round(0) }
+
 func NewOrderBook(opts ...Option) *OrderBook {
 	ob := &OrderBook{
 		orders: map[string]*Order{},
@@ -59,6 +94,7 @@ func NewOrderBook(opts ...Option) *OrderBook {
 		asks:   NewOrderSideAsk(),
 		Stop:   NewStopBook(),
 		OCO:    map[string]struct{}{},
+		clock:  utcNow,
 	}
 	for _, o := range opts {
 		o(ob)
@@ -94,6 +130,56 @@ func checkPrecision(d Decimal, maxDecimals int) bool {
 	return d.Scaled()%factor == 0
 }
 
+// Halt stops the book accepting new orders and amendments (Process, Replace, Modify,
+// ModifyStop return ErrTradingHalted). Cancels and expiry keep working and the book stays intact.
+func (ob *OrderBook) Halt() {
+	if ob.wal != nil {
+		ob.haltLogged(WALHalt, true)
+		return
+	}
+	ob.setHalted(true, false)
+}
+
+// Resume re-opens a halted book. The last trade price stays the circuit breaker reference.
+func (ob *OrderBook) Resume() {
+	if ob.wal != nil {
+		ob.haltLogged(WALResume, false)
+		return
+	}
+	ob.setHalted(false, false)
+}
+
+// IsHalted reports whether trading is halted.
+func (ob *OrderBook) IsHalted() bool { return ob.halted }
+
+// SetCircuitBreaker sets the price-move circuit breaker threshold in percent; 0 disables it.
+func (ob *OrderBook) SetCircuitBreaker(percent Decimal) { ob.breakerPct = percent }
+
+func (ob *OrderBook) setHalted(halted, auto bool) {
+	if ob.halted == halted {
+		return
+	}
+	ob.halted = halted
+	ob.emit(EventHalt, HaltEventData{Halted: halted, Auto: auto})
+}
+
+// checkBreaker records a trade price level and halts when it moved too far from the previous one.
+// The order being processed still completes; only later orders are rejected.
+func (ob *OrderBook) checkBreaker(price Decimal) {
+	last := ob.lastPrice
+	ob.lastPrice = price
+	if last.LessThanOrEqual(Zero) {
+		return
+	}
+	move := price.Sub(last)
+	if move.LessThan(Zero) {
+		move = Zero.Sub(move)
+	}
+	if move.Mul(FromInt(100)).GreaterThan(last.Mul(ob.breakerPct)) {
+		ob.setHalted(true, true)
+	}
+}
+
 // GetOrder returns Order by id
 func (ob *OrderBook) GetOrder(orderID string) *Order {
 	order, ok := ob.orders[orderID]
@@ -106,6 +192,14 @@ func (ob *OrderBook) GetOrder(orderID string) *Order {
 
 // CancelOrder removes Order with given ID from the Order book or the Stop book
 func (ob *OrderBook) CancelOrder(orderID string) *Order {
+	if ob.wal != nil {
+		return ob.cancelOrderLogged(orderID)
+	}
+	return ob.cancelOrder(orderID)
+}
+
+// cancelOrder is CancelOrder without the WAL gate.
+func (ob *OrderBook) cancelOrder(orderID string) *Order {
 	order := ob.GetOrder(orderID)
 	if order == nil {
 		return nil
@@ -130,17 +224,78 @@ func (ob *OrderBook) CancelOrder(orderID string) *Order {
 	return order
 }
 
+// ExpireOrders cancels every resting GTD order whose expiry is at or before now
+// and returns them in expiry order. Process also calls it automatically when the
+// book clock passes the earliest expiry; call it from a timer to expire orders
+// on an otherwise idle book. It scans all resting orders.
+func (ob *OrderBook) ExpireOrders(now time.Time) []*Order {
+	if ob.wal != nil {
+		return ob.expireOrdersLogged(now)
+	}
+	return ob.expireOrders(now)
+}
+
+// expireOrders is ExpireOrders without the WAL gate.
+func (ob *OrderBook) expireOrders(now time.Time) []*Order {
+	var expired []*Order
+	for _, o := range ob.orders {
+		if o.tif == GTD && !o.extra().expiresAt.After(now) {
+			expired = append(expired, o)
+		}
+	}
+	sort.Slice(expired, func(i, j int) bool {
+		if !expired[i].extra().expiresAt.Equal(expired[j].extra().expiresAt) {
+			return expired[i].extra().expiresAt.Before(expired[j].extra().expiresAt)
+		}
+		return expired[i].id < expired[j].id
+	})
+	for _, o := range expired {
+		ob.cancelOrder(o.ID())
+	}
+	ob.refreshNextExpiry()
+	return expired
+}
+
+// refreshNextExpiry recomputes nextExpiry from the resting GTD orders.
+func (ob *OrderBook) refreshNextExpiry() {
+	ob.nextExpiry = time.Time{}
+	for _, o := range ob.orders {
+		if o.tif == GTD && (ob.nextExpiry.IsZero() || o.extra().expiresAt.Before(ob.nextExpiry)) {
+			ob.nextExpiry = o.extra().expiresAt
+		}
+	}
+}
+
 // Modify changes the price or quantity of a resting limit order.
 // Returns false if the order is not found or is a stop-limit order.
 // In-place decrease: same price and newQty ≤ current open → keep time priority.
 // Re-queue: price change or quantity increase → remove and re-insert at back of new price level, then match.
 func (ob *OrderBook) Modify(orderID string, newPrice, newQty Decimal) (*Done, error) {
+	if ob.wal != nil {
+		return ob.modifyLogged(orderID, newPrice, newQty)
+	}
+	return ob.modify(orderID, newPrice, newQty)
+}
+
+// modify is Modify without the WAL gate.
+func (ob *OrderBook) modify(orderID string, newPrice, newQty Decimal) (*Done, error) {
+	if ob.halted {
+		return nil, ErrTradingHalted
+	}
 	order := ob.GetOrder(orderID)
 	if order == nil {
 		return nil, ErrOrderNotFound
 	}
 	if order.IsStopOrder() {
 		return nil, ErrNotLimitOrder
+	}
+	if ob.instrument != nil {
+		if err := ob.instrument.checkPrice(newPrice); err != nil {
+			return nil, err
+		}
+		if err := ob.instrument.checkQuantity(newQty, newQty); err != nil {
+			return nil, err
+		}
 	}
 
 	var prevBid, prevAsk Decimal
@@ -175,10 +330,22 @@ func (ob *OrderBook) Modify(orderID string, newPrice, newQty Decimal) (*Done, er
 	return done, nil
 }
 
-// ModifyStop changes the stop price, limit price, and/or quantity of a resting stop-limit order.
+// ModifyStop changes the stop price, limit price, and/or quantity of a resting stop order.
+// The limit price is ignored for stop-market orders.
 // Returns false if the order is not found or is not a stop-limit order.
 // The order is removed from the stop book and re-inserted at the back of the new stop price bucket.
 func (ob *OrderBook) ModifyStop(orderID string, newStopPrice, newLimitPrice, newQty Decimal) error {
+	if ob.wal != nil {
+		return ob.modifyStopLogged(orderID, newStopPrice, newLimitPrice, newQty)
+	}
+	return ob.modifyStop(orderID, newStopPrice, newLimitPrice, newQty)
+}
+
+// modifyStop is ModifyStop without the WAL gate.
+func (ob *OrderBook) modifyStop(orderID string, newStopPrice, newLimitPrice, newQty Decimal) error {
+	if ob.halted {
+		return ErrTradingHalted
+	}
 	order := ob.GetOrder(orderID)
 	if order == nil {
 		return ErrOrderNotFound
@@ -186,44 +353,143 @@ func (ob *OrderBook) ModifyStop(orderID string, newStopPrice, newLimitPrice, new
 	if !order.IsStopOrder() {
 		return ErrNotStopOrder
 	}
+	if ob.instrument != nil {
+		if err := ob.instrument.checkPrice(newStopPrice); err != nil {
+			return err
+		}
+		if err := ob.instrument.checkQuantity(newQty, newQty); err != nil {
+			return err
+		}
+		if order.orderType == TypeStopLimit {
+			if err := ob.instrument.checkPrice(newLimitPrice); err != nil {
+				return err
+			}
+		}
+	}
 	ob.Stop.Remove(order)
 	order.stop = newStopPrice
-	order.price = newLimitPrice
+	if order.orderType == TypeStopLimit {
+		order.price = newLimitPrice
+	}
 	order.SetQuantity(newQty)
 	order.originalQty = newQty
 	ob.Stop.Append(order)
 	return nil
 }
 
-// Process public method
-func (ob *OrderBook) Process(order *Order) (done *Done, err error) {
+// validate runs every order check that Process can reject on, without changing the book or the order.
+// ErrOrderExists is not included.
+func (ob *OrderBook) validate(order *Order) error {
+	if ob.halted {
+		return ErrTradingHalted
+	}
 	if order == nil || (!order.IsMarketOrder() && !order.IsLimitOrder() && !order.IsStopOrder()) {
-		return nil, ErrInvalidOrder
+		return ErrInvalidOrder
 	}
 	if order.Side() != Buy && order.Side() != Sell {
-		return nil, ErrInvalidSide
+		return ErrInvalidSide
 	}
 	if order.IsCanceled() {
-		return nil, ErrCanceledOrder
+		return ErrCanceledOrder
 	}
 	if order.Quantity().LessThanOrEqual(Zero) {
-		return nil, ErrInvalidQuantity
+		return ErrInvalidQuantity
 	}
 	if !checkPrecision(order.Quantity(), ob.quantityPrecision) {
-		return nil, errQuantityPrecision(order.Quantity(), ob.quantityPrecision)
+		return errQuantityPrecision(order.Quantity(), ob.quantityPrecision)
 	}
 	if !order.IsMarketOrder() && !checkPrecision(order.Price(), ob.pricePrecision) {
-		return nil, errPricePrecision(order.Price(), ob.pricePrecision)
+		return errPricePrecision(order.Price(), ob.pricePrecision)
 	}
 	if !order.IsMarketOrder() && order.IsStopOrder() && !checkPrecision(order.StopPrice(), ob.pricePrecision) {
-		return nil, errPricePrecision(order.StopPrice(), ob.pricePrecision)
+		return errPricePrecision(order.StopPrice(), ob.pricePrecision)
+	}
+	if ob.instrument != nil {
+		if err := ob.instrument.checkOrder(order); err != nil {
+			return err
+		}
+	}
+	if order.tif == FOK && order.extra().stp != STPNone && order.extra().participant != "" {
+		return ErrInvalidSTP
+	}
+	if order.extra().ttl > 0 && (order.IsMarketOrder() || (order.tif != "" && order.tif != GTC)) {
+		return ErrInvalidTif
+	}
+	if order.tif == GTD && !order.extra().expiresAt.After(ob.clock()) {
+		return ErrOrderExpired
+	}
+	return nil
+}
+
+// Replace atomically swaps the resting order oldID for newOrder: the new order is fully
+// validated before the old one is touched, so on error the old order stays on the book
+// untouched. newOrder may reuse oldID. The new order goes to the back of its queue and
+// matches like any submitted order; oldID is listed first in the returned Done.Canceled.
+func (ob *OrderBook) Replace(oldID string, newOrder *Order) (*Done, error) {
+	if ob.wal != nil {
+		return ob.replaceLogged(oldID, newOrder)
+	}
+	return ob.replace(oldID, newOrder)
+}
+
+// replace is Replace without the WAL gate.
+func (ob *OrderBook) replace(oldID string, newOrder *Order) (*Done, error) {
+	old := ob.GetOrder(oldID)
+	if old == nil {
+		return nil, ErrOrderNotFound
+	}
+	if err := ob.validate(newOrder); err != nil {
+		return nil, err
+	}
+	if newOrder.ID() != oldID && ob.GetOrder(newOrder.ID()) != nil {
+		return nil, ErrOrderExists
+	}
+	ob.cancelOrder(oldID)
+	done, err := ob.process(newOrder)
+	if done != nil {
+		done.Canceled = append([]string{oldID}, done.Canceled...)
+	}
+	return done, err
+}
+
+// Process public method
+func (ob *OrderBook) Process(order *Order) (done *Done, err error) {
+	if ob.wal != nil {
+		return ob.processLogged(order)
+	}
+	return ob.process(order)
+}
+
+// process is Process without the WAL gate.
+func (ob *OrderBook) process(order *Order) (done *Done, err error) {
+	if err := ob.validate(order); err != nil {
+		return nil, err
 	}
 	if ob.GetOrder(order.ID()) != nil {
 		return nil, ErrOrderExists
 	}
 
+	if order.ext != nil && order.ext.ttl > 0 {
+		order.tif = GTD
+		order.ext.expiresAt = ob.clock().Add(order.ext.ttl)
+		order.ext.ttl = 0
+	}
+
+	var expired []string
+	if !ob.nextExpiry.IsZero() || order.tif == GTD {
+		now := ob.clock()
+		if !ob.nextExpiry.IsZero() && !now.Before(ob.nextExpiry) {
+			for _, o := range ob.expireOrders(now) {
+				expired = append(expired, o.ID())
+			}
+		}
+		if order.tif == GTD && (ob.nextExpiry.IsZero() || order.extra().expiresAt.Before(ob.nextExpiry)) {
+			ob.nextExpiry = order.extra().expiresAt
+		}
+	}
+
 	if order.createdAt.IsZero() {
-		order.createdAt = time.Now()
+		order.createdAt = ob.clock()
 	}
 	ob.sequence++
 	var prevBid, prevAsk Decimal
@@ -241,6 +507,9 @@ func (ob *OrderBook) Process(order *Order) (done *Done, err error) {
 
 	if done != nil {
 		done.Sequence = ob.sequence
+		if len(expired) > 0 {
+			done.Canceled = append(expired, done.Canceled...)
+		}
 	}
 	ob.emitBBOIfChanged(prevBid, prevAsk)
 	return done, err
@@ -323,11 +592,15 @@ func (ob *OrderBook) processMarketOrder(marketOrder *Order) (done *Done, err err
 
 	done = newDone(marketOrder)
 
-	for quantity.GreaterThan(Zero) && side.Len() > 0 {
+	if ob.checkOCO(marketOrder, done) {
+		return
+	}
+
+	for quantity.GreaterThan(Zero) && side.Len() > 0 && !done.stpHalt {
 		bestPrice := iter()
 		if marketOrder.IsQuote() {
 			remaining := ob.processQueueQuote(bestPrice, quantity, done)
-			if remaining.Equal(quantity) {
+			if remaining.Equal(quantity) && bestPrice.Len() > 0 {
 				break // The budget cannot buy one more base unit at the best price.
 			}
 			quantity = remaining
@@ -338,8 +611,22 @@ func (ob *OrderBook) processMarketOrder(marketOrder *Order) (done *Done, err err
 
 	done.setLeftQuantity(&quantity)
 
-	// If market GetOrder was not fulfilled then cancel it
-	if done.Left.GreaterThan(Zero) {
+	if done.Processed.GreaterThan(Zero) {
+		ob.appendToOCO(marketOrder, done)
+	}
+
+	// Market-to-limit: rest the remainder at the last trade price
+	if marketOrder.extra().toLimit && !done.stpHalt && done.Left.GreaterThan(Zero) && done.Processed.GreaterThan(Zero) {
+		if marketOrder.ext != nil {
+			marketOrder.ext.toLimit = false
+		}
+		marketOrder.orderType = TypeLimit
+		marketOrder.price = done.Trades[len(done.Trades)-1].Price
+		marketOrder.SetQuantity(done.Left)
+		ob.appendLimitOrder(marketOrder)
+		done.Stored = true
+	} else if done.Left.GreaterThan(Zero) || done.stpHalt {
+		// If market GetOrder was not fulfilled then cancel it
 		marketOrder.Cancel()
 		done.appendCanceled(marketOrder)
 		ob.emit(EventCanceled, marketOrder.ID())
@@ -401,14 +688,18 @@ func (ob *OrderBook) processLimitOrder(limitOrder *Order) (done *Done, err error
 
 	bestPrice := iter()
 
-	for quantity.GreaterThan(Zero) && side.Len() > 0 && comparator(bestPrice.Price()) {
+	for quantity.GreaterThan(Zero) && side.Len() > 0 && !done.stpHalt && comparator(bestPrice.Price()) {
 		quantity = ob.processQueue(bestPrice, quantity, done)
 		bestPrice = iter()
 	}
 
 	done.setLeftQuantity(&quantity)
 
-	if done.Left.GreaterThan(Zero) || done.Processed.Equal(Zero) {
+	if done.stpHalt {
+		limitOrder.Cancel()
+		done.appendCanceled(limitOrder)
+		ob.emit(EventCanceled, limitOrder.ID())
+	} else if done.Left.GreaterThan(Zero) || done.Processed.Equal(Zero) {
 		if done.Left.GreaterThan(Zero) {
 			limitOrder.SetQuantity(done.Left)
 		} else {
@@ -421,9 +712,9 @@ func (ob *OrderBook) processLimitOrder(limitOrder *Order) (done *Done, err error
 	}
 
 	// If IOC GetOrder was not fulfilled then cancel it
-	if limitOrder.TIF() == IOC && quantity.GreaterThan(Zero) {
+	if limitOrder.TIF() == IOC && quantity.GreaterThan(Zero) && !done.stpHalt {
 		limitOrder.SetTaker()
-		done.appendCanceled(ob.CancelOrder(limitOrder.ID()))
+		done.appendCanceled(ob.cancelOrder(limitOrder.ID()))
 		done.Stored = false
 	}
 
@@ -470,7 +761,14 @@ func (ob *OrderBook) activateStopOrders(price Decimal) []*Order {
 
 func (ob *OrderBook) processPendingActivations(done *Done) {
 	for _, order := range done.drainPendingActivated() {
-		activatedDone, _ := ob.processLimitOrder(order)
+		var activatedDone *Done
+		if order.IsMarketOrder() {
+			// the stop book entry is a stale copy; market orders never rest, so drop it
+			delete(ob.orders, order.ID())
+			activatedDone, _ = ob.processMarketOrder(order)
+		} else {
+			activatedDone, _ = ob.processLimitOrder(order)
+		}
 		done.Activated = append(done.Activated, order.ID())
 		done.Activations = append(done.Activations, activatedDone)
 		ob.emit(EventActivated, order.ID())
@@ -487,10 +785,18 @@ func (ob *OrderBook) processQueueQuote(bestPrice *OrderQueue, quantity Decimal, 
 func (ob *OrderBook) processQueue(orderQueue *OrderQueue, quantity Decimal, done *Done) Decimal {
 	touch := false
 	price := orderQueue.Price()
+	taker := done.Order.extra()
+	checkSTP, takerParticipant := taker.stp != STPNone && taker.participant != "", taker.participant
 
 	for quantity.GreaterThan(Zero) && orderQueue.Len() > 0 {
-		touch = true
 		o := orderQueue.First()
+		if checkSTP && o.extra().participant == takerParticipant {
+			if ob.preventSelfTrade(o, orderQueue, &quantity, done) {
+				break
+			}
+			continue
+		}
+		touch = true
 		orderQuantity := o.Quantity()
 		if quantity.LessThan(orderQuantity) {
 			done.appendOrder(o, quantity, price)
@@ -522,10 +828,94 @@ func (ob *OrderBook) processQueue(orderQueue *OrderQueue, quantity Decimal, done
 	}
 
 	if touch {
+		if ob.breakerPct.GreaterThan(Zero) {
+			ob.checkBreaker(price)
+		}
+		ob.trailStops(price)
 		done.addPendingActivated(ob.activateStopOrders(price)...)
 	}
 
 	return quantity
+}
+
+// trailStops moves trailing stops toward a trade at price; they never move away.
+func (ob *OrderBook) trailStops(price Decimal) {
+	var trailing []*Order
+	for _, o := range ob.Stop.orders {
+		if o.IsTrailing() {
+			trailing = append(trailing, o)
+		}
+	}
+	if len(trailing) > 1 { // map order is random; keep re-queueing deterministic for WAL replay
+		sort.Slice(trailing, func(i, j int) bool {
+			if !trailing[i].createdAt.Equal(trailing[j].createdAt) {
+				return trailing[i].createdAt.Before(trailing[j].createdAt)
+			}
+			return trailing[i].id < trailing[j].id
+		})
+	}
+	for _, o := range trailing {
+		offset := o.extra().trail
+		if o.extra().trailPct {
+			offset = price.Mul(o.extra().trail).Div(FromInt(100))
+		}
+		var candidate Decimal
+		if o.Side() == Sell {
+			candidate = price.Sub(offset)
+			if !candidate.GreaterThan(o.stop) {
+				continue
+			}
+		} else {
+			candidate = price.Add(offset)
+			if !candidate.LessThan(o.stop) {
+				continue
+			}
+		}
+		ob.Stop.Remove(o)
+		o.stop = candidate
+		ob.Stop.Append(o)
+	}
+}
+
+// preventSelfTrade applies the incoming order's STP mode against resting, a
+// same-participant order. It returns true when the incoming order must stop matching.
+func (ob *OrderBook) preventSelfTrade(resting *Order, queue *OrderQueue, quantity *Decimal, done *Done) bool {
+	mode := done.Order.extra().stp
+	if mode == STPDecrement && done.Order.IsQuote() {
+		mode = STPCancelNewest // a quote budget cannot be decremented in base units
+	}
+	switch mode {
+	case STPCancelOldest, STPCancelBoth:
+		ob.cancelResting(resting, done)
+		if mode == STPCancelBoth {
+			done.stpHalt = true
+		}
+	case STPDecrement:
+		overlap := *quantity
+		if resting.Quantity().LessThan(overlap) {
+			overlap = resting.Quantity()
+		}
+		*quantity = quantity.Sub(overlap)
+		done.Quantity = done.Quantity.Sub(overlap)
+		if overlap.Equal(resting.Quantity()) {
+			ob.cancelResting(resting, done)
+		} else {
+			queue.UpdateVolume(overlap)
+			resting.DecreaseQuantity(overlap)
+			ob.emit(EventVolume, VolumeEventData{Side: resting.Side(), Price: queue.Price(), Volume: queue.Volume()})
+		}
+		done.stpHalt = quantity.Equal(Zero)
+	default:
+		done.stpHalt = true
+	}
+	return done.stpHalt
+}
+
+func (ob *OrderBook) cancelResting(o *Order, done *Done) {
+	o.Cancel()
+	ob.deleteOrder(o)
+	done.appendCanceled(o)
+	ob.emit(EventCanceled, o.ID())
 }
 
 // bboSnapshot captures the current best bid and ask prices (zero if empty).

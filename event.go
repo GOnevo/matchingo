@@ -10,6 +10,7 @@ const (
 	EventCanceled  EventType = "canceled"
 	EventActivated EventType = "activated"
 	EventBBO       EventType = "bbo"
+	EventHalt      EventType = "halt"
 )
 
 // BBOEventData carries the best bid and best ask after a change.
@@ -17,6 +18,13 @@ const (
 type BBOEventData struct {
 	Bid *Level
 	Ask *Level
+}
+
+// HaltEventData carries the trading state after a halt or resume.
+// Auto is true when the circuit breaker (not Halt) caused a halt.
+type HaltEventData struct {
+	Halted bool
+	Auto   bool
 }
 
 // VolumeEventData carries the data for a volume event.

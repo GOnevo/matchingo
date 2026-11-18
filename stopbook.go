@@ -95,6 +95,23 @@ func (sb *StopBook) Activate(price Decimal, side Side) []Order {
 	return result
 }
 
+// inOrder returns all stop orders by ascending stop price, then queue order.
+func (sb *StopBook) inOrder() []*Order {
+	prices := make([]Decimal, 0, len(sb.prices))
+	for p := range sb.prices {
+		prices = append(prices, p)
+	}
+	sort.Slice(prices, func(i, j int) bool { return prices[i].LessThan(prices[j]) })
+	out := make([]*Order, 0, sb.numOrders)
+	for _, p := range prices {
+		q := sb.prices[p]
+		for i := 0; i < q.Orders.Len(); i++ {
+			out = append(out, q.Orders.At(i))
+		}
+	}
+	return out
+}
+
 // Remove removes Order from definite Price level
 func (sb *StopBook) Remove(order *Order) *Order {
 	price := order.StopPrice()

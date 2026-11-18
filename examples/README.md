@@ -181,7 +181,7 @@ an audit log.
 | `EventVolume` | Volume at a price level changed |
 | `EventDepth` | `ob.Depth()` was called |
 | `EventCanceled` | An order was canceled |
-| `EventActivated` | A stop-limit order became live |
+| `EventActivated` | A stop order became live |
 
 Key ideas:
 - Implement `matchingo.EventEmitter` (single `Emit` method)
@@ -202,6 +202,143 @@ Key ideas:
 - `ob.SetPricePrecision(n)` — reject prices (and stop prices) with more than `n` decimal places
 - Default `0` means no limit
 - Returns `ErrQuantityPrecision` or `ErrPricePrecision` — no panic, no silent truncation
+
+---
+
+## 14 · Stop-Market Orders
+
+**File:** [14_stop_market_orders/main.go](14_stop_market_orders/main.go)
+
+A stop-market order waits in the stop book like a stop-limit, but activates as
+a **market order**: no limit price, it sweeps whatever liquidity is available.
+
+Key ideas:
+- `NewStopMarketOrder(id, side, qty, stopPrice, oco)`
+- Activation can walk several price levels
+- Unfilled remainder is canceled (`done.Canceled`), it never rests in the book
+
+---
+
+## 15 · Trailing Stop Orders
+
+**File:** [15_trailing_stop/main.go](15_trailing_stop/main.go)
+
+A trailing stop is a stop-market order whose stop follows the trade price at a
+fixed offset or percentage, moving only in the favorable direction.
+
+Key ideas:
+- `NewTrailingStopOrder(id, side, qty, initialStop, offset, oco)`
+- `NewTrailingStopPercentOrder(id, side, qty, initialStop, percent, oco)`
+- Re-evaluated on every trade; activates as a market order
+
+---
+
+## 16 · Market-to-Limit Orders
+
+**File:** [16_market_to_limit/main.go](16_market_to_limit/main.go)
+
+A market order whose unfilled remainder rests as a limit order at the last
+trade price instead of being canceled.
+
+Key ideas:
+- `NewMarketToLimitOrder(id, side, qty)`
+- `done.Stored` — true when a remainder was placed on the book
+- No fills at all → canceled, like a plain market order
+
+---
+
+## 17 · Good-Till-Date Orders
+
+**File:** [17_good_till_date/main.go](17_good_till_date/main.go)
+
+Limit orders that the engine cancels once an expiry time passes.
+
+Key ideas:
+- `NewGTDOrder(id, side, qty, price, expiresAt, oco)`
+- Lazy expiry on the next `Process`; `ob.ExpireOrders(now)` for an explicit sweep
+- `WithClock` injects a time source
+- `order.SetTTL(d)` — lifetime relative to submission, also for stop orders
+
+---
+
+## 18 · Self-Trade Prevention
+
+**File:** [18_self_trade_prevention/main.go](18_self_trade_prevention/main.go)
+
+Stops an order from trading with resting orders of the same participant.
+
+Key ideas:
+- `order.SetSTP(participantID, mode)` — the incoming order's mode applies
+- `STPCancelNewest` / `STPCancelOldest` / `STPCancelBoth` / `STPDecrement`
+- `done.Canceled` lists orders removed by prevention; no trade is produced
+
+---
+
+## 19 · Atomic Replace
+
+**File:** [19_replace/main.go](19_replace/main.go)
+
+Cancel-replace in one call: validate the new order first, then cancel the old
+one and process the new one.
+
+Key ideas:
+- `ob.Replace(oldID, newOrder)`; the new order may reuse the old ID
+- A failed replace leaves the old order resting
+- `done.Canceled` lists the replaced order first
+
+---
+
+## 20 · Trading Halts and Circuit Breaker
+
+**File:** [20_halts_and_circuit_breaker/main.go](20_halts_and_circuit_breaker/main.go)
+
+Pause a book without losing it, manually or automatically.
+
+Key ideas:
+- `ob.Halt()` / `ob.Resume()` / `ob.IsHalted()`; new orders and amendments get `ErrTradingHalted`, cancels still work
+- `WithCircuitBreaker(percent)` halts when a trade moves more than `percent` from the previous trade
+- `EventHalt` reports every state change
+
+---
+
+## 21 · Instrument Constraints
+
+**File:** [21_instrument/main.go](21_instrument/main.go)
+
+Reject orders that break tick size, lot size, quantity range or the price band.
+
+Key ideas:
+- `WithInstrument(Instrument{TickSize, LotSize, MinQuantity, MaxQuantity, MinPrice, MaxPrice})`
+- `ErrTickSize`, `ErrLotSize`, `ErrQuantityRange`, `ErrPriceBand` (use `errors.Is`)
+- Also enforced on `Modify`, `ModifyStop` and `Replace`
+
+---
+
+## 22 · Write-Ahead Log and Crash Recovery
+
+**File:** [22_wal_recovery/main.go](22_wal_recovery/main.go)
+
+Log every command before applying it, then rebuild the book after a crash from
+the latest snapshot plus the log tail.
+
+Key ideas:
+- `WithWAL(NewJSONWAL(file))`; `Snapshot.WALSeq` marks the covered prefix
+- `ReadWAL` + `Restore` + `Replay` reproduce the exact state
+- A failed `Append` blocks the command and latches `ob.WALError()`
+
+---
+
+## 23 · Concurrent Use
+
+**File:** [23_concurrent/main.go](23_concurrent/main.go)
+
+Share one book between goroutines without paying for locks when you don't need them.
+
+Key ideas:
+- `NewConcurrentOrderBook(opts...)` wraps an `OrderBook` with a read/write lock
+- Each call is atomic; results equal a single-threaded order of the calls
+- `GetOrder` returns a copy; `View`/`Update` cover anything unwrapped
+- Emitters and WALs run under the lock and must not call back into the book
 
 ---
 

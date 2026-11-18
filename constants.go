@@ -5,9 +5,23 @@ type OrderType string
 
 // Different order types
 const (
-	TypeMarket    OrderType = "MARKET"
-	TypeLimit     OrderType = "LIMIT"
-	TypeStopLimit OrderType = "STOP-LIMIT"
+	TypeMarket     OrderType = "MARKET"
+	TypeLimit      OrderType = "LIMIT"
+	TypeStopLimit  OrderType = "STOP-LIMIT"
+	TypeStopMarket OrderType = "STOP-MARKET"
+)
+
+// STPMode selects what happens when an incoming order would trade against a
+// resting order of the same participant. The incoming order's mode applies.
+type STPMode uint8
+
+// Self-trade prevention modes
+const (
+	STPNone         STPMode = iota // no prevention (default)
+	STPCancelNewest                // cancel the incoming order's remainder
+	STPCancelOldest                // cancel the resting order and keep matching
+	STPCancelBoth                  // cancel the resting order and the incoming remainder
+	STPDecrement                   // reduce both by the overlap without a trade
 )
 
 // Role of the Order
@@ -45,4 +59,5 @@ const (
 	GTC TIF = "GTC"
 	FOK TIF = "FOK"
 	IOC TIF = "IOC"
+	GTD TIF = "GTD"
 )

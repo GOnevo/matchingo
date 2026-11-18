@@ -2,6 +2,7 @@ package matchingo
 
 import (
 	"errors"
+	"sort"
 	"time"
 )
 
@@ -22,26 +23,39 @@ type OrderRecord struct {
 	PeakQty     Decimal
 	HiddenQty   Decimal
 	PostOnly    bool
+	Trail       Decimal
+	TrailPct    bool
+	ExpiresAt   time.Time
+	Participant string
+	STP         STPMode
+	TTL         time.Duration // pending lifetime of a not-yet-processed order (WAL records)
+	ToLimit     bool          // pending market-to-limit flag (WAL records)
 	CreatedAt   time.Time
 }
 
 // Snapshot is a serializable snapshot of the full engine state.
 type Snapshot struct {
-	Version  int
-	Sequence uint64
-	TradeID  uint64
-	Bids     []OrderRecord
-	Asks     []OrderRecord
-	Stops    []OrderRecord
-	OCO      []string
+	Version   int
+	Sequence  uint64
+	TradeID   uint64
+	WALSeq    uint64 // last WAL record covered by this snapshot
+	Halted    bool
+	LastPrice Decimal
+	Bids      []OrderRecord
+	Asks      []OrderRecord
+	Stops     []OrderRecord
+	OCO       []string
 }
 
 // Dump returns a plain-data snapshot of the current engine state.
 func (ob *OrderBook) Dump() Snapshot {
 	snap := Snapshot{
-		Version:  snapshotVersion,
-		Sequence: ob.sequence,
-		TradeID:  ob.tradeID,
+		Version:   snapshotVersion,
+		Sequence:  ob.sequence,
+		TradeID:   ob.tradeID,
+		WALSeq:    ob.walSeq,
+		Halted:    ob.halted,
+		LastPrice: ob.lastPrice,
 	}
 
 	for _, price := range ob.bids.Prices() {
@@ -58,13 +72,14 @@ func (ob *OrderBook) Dump() Snapshot {
 		}
 	}
 
-	for id := range ob.Stop.orders {
-		snap.Stops = append(snap.Stops, orderToRecord(ob.Stop.orders[id]))
+	for _, o := range ob.Stop.inOrder() {
+		snap.Stops = append(snap.Stops, orderToRecord(o))
 	}
 
 	for id := range ob.OCO {
 		snap.OCO = append(snap.OCO, id)
 	}
+	sort.Strings(snap.OCO)
 
 	return snap
 }
@@ -84,6 +99,9 @@ func (ob *OrderBook) Restore(snap Snapshot) error {
 	ob.OCO = map[string]struct{}{}
 	ob.sequence = snap.Sequence
 	ob.tradeID = snap.TradeID
+	ob.walSeq = snap.WALSeq
+	ob.halted = snap.Halted
+	ob.lastPrice = snap.LastPrice
 
 	for _, rec := range snap.Bids {
 		o := recordToOrder(rec)
@@ -107,6 +125,8 @@ func (ob *OrderBook) Restore(snap Snapshot) error {
 		ob.OCO[id] = struct{}{}
 	}
 
+	ob.refreshNextExpiry()
+
 	return nil
 }
 
@@ -125,12 +145,19 @@ func orderToRecord(o *Order) OrderRecord {
 		PeakQty:     o.peakQty,
 		HiddenQty:   o.hiddenQty,
 		PostOnly:    o.postOnly,
+		Trail:       o.extra().trail,
+		TrailPct:    o.extra().trailPct,
+		ExpiresAt:   o.extra().expiresAt,
+		Participant: o.extra().participant,
+		STP:         o.extra().stp,
+		TTL:         o.extra().ttl,
+		ToLimit:     o.extra().toLimit,
 		CreatedAt:   o.createdAt,
 	}
 }
 
 func recordToOrder(rec OrderRecord) *Order {
-	return &Order{
+	o := &Order{
 		id:          rec.ID,
 		orderType:   rec.OrderType,
 		side:        rec.Side,
@@ -146,4 +173,16 @@ func recordToOrder(rec OrderRecord) *Order {
 		postOnly:    rec.PostOnly,
 		createdAt:   rec.CreatedAt,
 	}
+	if rec.Trail.GreaterThan(Zero) || !rec.ExpiresAt.IsZero() || rec.Participant != "" || rec.STP != STPNone || rec.TTL > 0 || rec.ToLimit {
+		o.ext = &orderExt{
+			trail:       rec.Trail,
+			trailPct:    rec.TrailPct,
+			expiresAt:   rec.ExpiresAt,
+			participant: rec.Participant,
+			stp:         rec.STP,
+			ttl:         rec.TTL,
+			toLimit:     rec.ToLimit,
+		}
+	}
+	return o
 }
