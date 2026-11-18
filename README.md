@@ -65,6 +65,7 @@ go run ./examples/01_basic_limit_orders/
 ## Good to Know
 
 - Use `NewConcurrentOrderBook` if several goroutines share one book. Scale by running one book per symbol.
+- `order.SetCreatedAt(t)` supplies your own order timestamp, so the book skips its clock read for that order.
 - Invalid input is rejected with a typed error (`ErrInvalidQuantity`, `ErrTradingHalted`, `ErrTickSize`, ...) and leaves the book untouched. Use `errors.Is` to check.
 - Configuration (precision, instrument, circuit breaker) is set with options such as `WithPrecision`, `WithInstrument`, `WithCircuitBreaker`, `WithWAL`, `WithEmitter`, `WithClock`, and is not stored in snapshots: rebuild a recovered book with the same options.
 
@@ -84,8 +85,10 @@ goos: darwin
 goarch: arm64
 pkg: github.com/gonevo/matchingo/tests/orderbook
 cpu: Apple M2
-BenchmarkLimitOrders-8    15819102    73.58 ns/op    288 B/op    2 allocs/op
+BenchmarkLimitOrders-8         3554872    318.4 ns/op    816 B/op    4 allocs/op
 ```
+
+Each iteration rests one sell and fills it with one buy, with caller-supplied timestamps (`SetCreatedAt`).
 
 ## Contributing
 

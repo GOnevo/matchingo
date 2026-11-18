@@ -13,6 +13,7 @@ type OrderSide struct {
 	prices        map[Decimal]*OrderQueue
 	len           int
 	depth         int
+	spare         *OrderQueue // emptied queue kept for the next new price level
 }
 
 // NewOrderSideAsk creates new OrderSide manager
@@ -83,7 +84,12 @@ func (os *OrderSide) Append(o *Order) {
 
 	priceQueue, ok := os.prices[price]
 	if !ok {
-		priceQueue = NewOrderQueue(price)
+		if priceQueue = os.spare; priceQueue != nil {
+			os.spare = nil
+			priceQueue.price, priceQueue.volume = price, Zero
+		} else {
+			priceQueue = NewOrderQueue(price)
+		}
 		os.prices[price] = priceQueue
 		os.priceInsert(price)
 		os.depth++
@@ -107,6 +113,7 @@ func (os *OrderSide) Remove(order *Order) *Order {
 	if priceQueue.Len() == 0 {
 		delete(os.prices, price)
 		os.priceRemove(price)
+		os.spare = priceQueue
 		os.depth--
 	}
 

@@ -44,23 +44,25 @@ func newTradeOrder(order *Order, quantity, price Decimal) TradeOrder {
 
 // Order stores information about order
 type Order struct {
-	id          string
-	orderType   OrderType
-	side        Side
-	isQuote     bool
+	// pointer-bearing fields first so the GC scans a short prefix
+	id        string
+	orderType OrderType
+	role      Role
+	tif       TIF
+	oco       string
+	ext       *orderExt // rarely used attributes; nil for plain orders
+	createdAt time.Time
+
 	quantity    Decimal
 	originalQty Decimal
 	price       Decimal
-	canceled    bool
-	role        Role
 	stop        Decimal
-	tif         TIF
-	oco         string
 	peakQty     Decimal
 	hiddenQty   Decimal
+	side        Side
+	isQuote     bool
+	canceled    bool
 	postOnly    bool
-	ext         *orderExt // rarely used attributes; nil for plain orders
-	createdAt   time.Time
 }
 
 // orderExt holds attributes few orders use, keeping the common Order small.
@@ -388,6 +390,14 @@ func (o *Order) HiddenQty() Decimal {
 // ID returns OrderID field copy
 func (o *Order) ID() string {
 	return o.id
+}
+
+// SetCreatedAt sets the creation time of a not-yet-processed order. Process keeps it instead of reading
+// the book clock, which saves one clock read per order and lets the caller supply its own (e.g. exchange
+// or ingress) timestamp. A zero time leaves the stamp to the book. The time is logged to the WAL and
+// restored by snapshots like any stamped one.
+func (o *Order) SetCreatedAt(t time.Time) {
+	o.createdAt = t
 }
 
 // CreatedAt returns the time the order was created.

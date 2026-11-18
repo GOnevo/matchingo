@@ -32,16 +32,25 @@ type DoneJSON struct {
 	Stored      bool         `json:"stored"`
 }
 
-func newDone(order *Order) *Done {
-	return &Done{
-		Order:     order,
-		Trades:    nil,
-		Canceled:  nil,
-		Activated: nil,
-		Quantity:  order.Quantity(),
-		Left:      Zero,
-		Processed: Zero,
+// newDone creates the result for order. When the order is known to cross the book, the Done is allocated
+// together with room for a single fill, so recording it needs no second allocation.
+func newDone(order *Order, crosses bool) *Done {
+	var d *Done
+	if crosses {
+		w := &struct {
+			Done
+			trades [2]TradeOrder
+		}{}
+		w.Trades = w.trades[:0]
+		d = &w.Done
+	} else {
+		d = &Done{}
 	}
+	d.Order = order
+	d.Quantity = order.Quantity()
+	d.Left = Zero
+	d.Processed = Zero
+	return d
 }
 
 // GetTradeOrder returns TradeOrder by id
@@ -57,7 +66,9 @@ func (d *Done) GetTradeOrder(id string) *TradeOrder {
 func (d *Done) appendOrder(order *Order, quantity, price Decimal) {
 
 	if len(d.Trades) == 0 {
-		d.Trades = make([]TradeOrder, 0, 2)
+		if cap(d.Trades) < 2 { // crossing orders arrive with room for one fill
+			d.Trades = make([]TradeOrder, 0, 2)
+		}
 		d.Trades = append(d.Trades, newTradeOrder(d.Order, Zero, d.Order.Price()))
 	}
 

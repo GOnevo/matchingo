@@ -13,13 +13,16 @@ type OrderQueue struct {
 
 // NewOrderQueue creates and initialize OrderQueue object
 func NewOrderQueue(price Decimal) *OrderQueue {
-	orders := &deque.Deque[*Order]{}
-	orders.SetBaseCap(16)
-	return &OrderQueue{
-		price:  price,
-		volume: Zero,
-		Orders: orders,
-	}
+	// queue and deque share one allocation
+	q := &struct {
+		OrderQueue
+		orders deque.Deque[*Order]
+	}{}
+	q.orders.SetBaseCap(16)
+	q.price = price
+	q.volume = Zero
+	q.Orders = &q.orders
+	return &q.OrderQueue
 }
 
 // Len returns amount of Orders in queue

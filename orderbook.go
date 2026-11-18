@@ -590,7 +590,7 @@ func (ob *OrderBook) processMarketOrder(marketOrder *Order) (done *Done, err err
 
 	iter = side.BestPriceQueue
 
-	done = newDone(marketOrder)
+	done = newDone(marketOrder, side.Len() > 0)
 
 	if ob.checkOCO(marketOrder, done) {
 		return
@@ -657,7 +657,7 @@ func (ob *OrderBook) processLimitOrder(limitOrder *Order) (done *Done, err error
 
 	iter = side.BestPriceQueue
 
-	done = newDone(limitOrder)
+	done = newDone(limitOrder, side.Len() > 0 && comparator(iter().Price()))
 
 	if ob.checkOCO(limitOrder, done) {
 		return
@@ -726,7 +726,7 @@ func (ob *OrderBook) processLimitOrder(limitOrder *Order) (done *Done, err error
 func (ob *OrderBook) processStopOrder(stopOrder *Order) (done *Done, err error) {
 	ob.Stop.Append(stopOrder)
 	ob.orders[stopOrder.ID()] = stopOrder
-	done = newDone(stopOrder)
+	done = newDone(stopOrder, false)
 	return
 }
 
@@ -803,16 +803,14 @@ func (ob *OrderBook) processQueue(orderQueue *OrderQueue, quantity Decimal, done
 			orderQueue.UpdateVolume(quantity)
 			o.DecreaseQuantity(quantity)
 			ob.tradeID++
-			ob.emit(EventTrade, TradeEventData{TradeID: ob.tradeID, MakerID: o.ID(), TakerID: done.Order.ID(), Price: price, Amount: quantity, Sequence: ob.sequence})
-			ob.emit(EventVolume, VolumeEventData{Side: o.Side(), Price: price, Volume: orderQueue.Volume()})
+			ob.emitTrade(o, done.Order, price, quantity, orderQueue)
 			quantity = Zero
 		} else {
 			ob.appendToOCO(o, done)
 			ob.deleteOrder(o)
 			done.appendOrder(o, orderQuantity, price)
 			ob.tradeID++
-			ob.emit(EventTrade, TradeEventData{TradeID: ob.tradeID, MakerID: o.ID(), TakerID: done.Order.ID(), Price: price, Amount: orderQuantity, Sequence: ob.sequence})
-			ob.emit(EventVolume, VolumeEventData{Side: o.Side(), Price: price, Volume: orderQueue.Volume()})
+			ob.emitTrade(o, done.Order, price, orderQuantity, orderQueue)
 			quantity = quantity.Sub(orderQuantity)
 			if o.IsIceberg() && o.hiddenQty.GreaterThan(Zero) {
 				refillQty := o.peakQty
@@ -836,6 +834,15 @@ func (ob *OrderBook) processQueue(orderQueue *OrderQueue, quantity Decimal, done
 	}
 
 	return quantity
+}
+
+// emitTrade publishes the trade and the maker level's new volume; it builds nothing when no emitter is attached.
+func (ob *OrderBook) emitTrade(maker, taker *Order, price, amount Decimal, level *OrderQueue) {
+	if ob.emitter == nil {
+		return
+	}
+	ob.emit(EventTrade, TradeEventData{TradeID: ob.tradeID, MakerID: maker.ID(), TakerID: taker.ID(), Price: price, Amount: amount, Sequence: ob.sequence})
+	ob.emit(EventVolume, VolumeEventData{Side: maker.Side(), Price: price, Volume: level.Volume()})
 }
 
 // trailStops moves trailing stops toward a trade at price; they never move away.

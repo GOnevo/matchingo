@@ -3,6 +3,7 @@ package orderbook
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/gonevo/matchingo"
 )
@@ -527,32 +528,44 @@ func TestOrderBook_PartialFillVolumeConservationSingleOrder(t *testing.T) {
 var BenchPrice = matchingo.FromInt(16)
 var BenchQuantity = matchingo.FromInt(150)
 
-// benchIDs are pre-allocated order IDs to avoid string formatting overhead in benchmarks.
-var benchIDs = func() []string {
-	ids := make([]string, 1024)
-	for i := range ids {
-		ids[i] = fmt.Sprintf("buy-%d", i)
-	}
-	return ids
-}()
-
 func BenchmarkAppendLimitOrders(b *testing.B) {
+	ids := uniqueIDs("buy-", b.N)
 	ob := matchingo.NewOrderBook()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ob.Process(matchingo.NewLimitOrder(benchIDs[i%len(benchIDs)], matchingo.Buy, BenchQuantity, BenchPrice, "", ""))
+		ob.Process(matchingo.NewLimitOrder(ids[i], matchingo.Buy, BenchQuantity, BenchPrice, "", ""))
 	}
 	b.StopTimer()
 }
 
+var generateIds = func(prefix string, n int) []string {
+	ids := make([]string, n)
+	for i := range n {
+		ids[i] = fmt.Sprintf("%s-%d", prefix, i)
+	}
+	return ids
+}
+
 func BenchmarkLimitOrders(b *testing.B) {
+	// each buy fully fills the sell before it, so only one order is ever live: a small ID pool stays unique
+	// and keeps b.N-sized string slices out of the heap the GC has to scan
+	const pool = 1024
+	var sellIds = generateIds("sell", pool)
+	var buyIds = generateIds("buy", pool)
 	ob := matchingo.NewOrderBook()
+	ts := time.Now() // caller-supplied timestamp: the book does not read its clock per order
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ob.Process(matchingo.NewLimitOrder(benchIDs[i%len(benchIDs)], matchingo.Sell, BenchQuantity, BenchPrice, "", ""))
-	}
-	for i := 0; i < b.N; i++ {
-		ob.Process(matchingo.NewLimitOrder(benchIDs[i%len(benchIDs)], matchingo.Buy, BenchQuantity, BenchPrice, "", ""))
+		sell := matchingo.NewLimitOrder(sellIds[i%pool], matchingo.Sell, BenchQuantity, BenchPrice, "", "")
+		sell.SetCreatedAt(ts)
+		if _, err := ob.Process(sell); err != nil {
+			b.Fatal(err)
+		}
+		buy := matchingo.NewLimitOrder(buyIds[i%pool], matchingo.Buy, BenchQuantity, BenchPrice, "", "")
+		buy.SetCreatedAt(ts)
+		if _, err := ob.Process(buy); err != nil {
+			b.Fatal(err)
+		}
 	}
 	b.StopTimer()
 }

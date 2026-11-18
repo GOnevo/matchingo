@@ -162,7 +162,7 @@ The FOK feasibility check sums resting volume from the best level outward while 
 
 Validation, in order: trading not halted; order well-formed (known type, valid side, not already canceled); quantity > 0; quantity/price within decimal precision; instrument rules (§9.3); FOK/STP compatibility; TTL compatibility; expiry not in the past; ID not already in use. A rejected order changes nothing and is not logged to the WAL.
 
-Accepted orders: expired orders are purged if the clock passed the earliest expiry (§8); a creation timestamp is set; the sequence number increments; then the order is dispatched to market / limit / stop handling.
+Accepted orders: expired orders are purged if the clock passed the earliest expiry (§8); a creation timestamp is set (the book clock's reading, unless the caller already stamped the order with its own time, which is kept and saves the clock read); the sequence number increments; then the order is dispatched to market / limit / stop handling.
 
 ### 6.2 Cancel
 

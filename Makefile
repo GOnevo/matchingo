@@ -15,5 +15,5 @@ test-verbose: imports fix ## Run tests with verbose output
 	go test ./tests/... -v
 coverage: ## Show test coverage table
 	go test -coverpkg=github.com/gonevo/matchingo -coverprofile=/tmp/cover.out ./tests/... >/dev/null 2>&1 && go tool cover -func=/tmp/cover.out
-bench: ## Run benchmarks
-	go test -bench="BenchmarkLimitOrders" -benchmem ./tests/...
+bench: ## Run benchmarks (1 second each)
+	go test -run=^$$ -bench="BenchmarkLimitOrders" -benchtime=1s -benchmem ./tests/orderbook/
