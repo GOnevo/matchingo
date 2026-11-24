@@ -128,4 +128,7 @@ Built by [Vano Devium](https://github.com/vanodevium/)
 
 Made with ❤️ in Ukraine
 
-[![Buy Me A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/vanodevium)
+<p>
+  <a href="https://www.buymeacoffee.com/devium"><img src="https://cdn.buymeacoffee.com/buttons/lato-black.png" alt="Buy Me A Coffee" height="40"></a>
+  <a href="https://buymeatokens.com/devium"><img src="https://buymeatokens.com/api/badge/devium" alt="Buy me AI tokens" height="40"></a>
+</p>
