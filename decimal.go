@@ -2,6 +2,7 @@ package matchingo
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/nikolaydubina/fpdecimal"
 )
@@ -157,6 +158,19 @@ func D[T Numeric](v T) Decimal {
 		}
 		return d
 	default:
-		panic(fmt.Sprintf("matchingo.D: unsupported type %T", v))
+		// Defined types satisfy Numeric, but do not match the built-in type cases.
+		value := reflect.ValueOf(v)
+		switch value.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			return Decimal{fpdecimal.FromInt(value.Int())}
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			return Decimal{fpdecimal.FromInt(value.Uint())}
+		case reflect.Float32, reflect.Float64:
+			return FromFloat(value.Float())
+		case reflect.String:
+			return D(value.String())
+		default:
+			panic(fmt.Sprintf("matchingo.D: unsupported type %T", v))
+		}
 	}
 }
